@@ -1,0 +1,16 @@
+model_name: "Qwen/Qwen2.5-7B-Instruct" #"Mistralai/Mistral-7B-Instruct-v0.3" #"meta-llama/Llama-3.1-8B-Instruct"   # 可换Qwen/Mistral
+device: "cuda"
+
+max_new_tokens: 64
+temperature: 0.0
+num_pairs: 20                   # 处理样本数，-1为全部
+layers_to_probe: [8, 12, 16, 20, 24]   # 先粗扫中高层
+token_span_first_step: 48              # 对齐“首步CoT”token长度
+steer_strengths: [0.5, 1.0, 1.5]  # 扫描强度
+
+batch_size: 4
+seed: 42
+
+metrics:
+  - factual_consistency   # 事实一致率（基于模板判定：是否复述/使用了题干关键条件）
+  - answer_accuracy       # 最终答案正确率（可选）

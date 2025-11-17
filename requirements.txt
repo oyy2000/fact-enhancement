@@ -1,0 +1,14 @@
+transformers>=4.44
+accelerate
+datasets
+tokenizers
+torch>=2.1
+numpy
+pandas
+tqdm
+pyyaml
+einops
+
+# 机制解释与补丁/操控
+transformer-lens>=2.1.0   # 含 generic_activation_patch 等API :contentReference[oaicite:0]{index=0}
+git+https://github.com/IBM/activation-steering.git  # 通用steering库（ICLR'25）:contentReference[oaicite:1]{index=1}
