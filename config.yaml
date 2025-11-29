@@ -1,4 +1,4 @@
-model_name: "Qwen/Qwen2.5-7B-Instruct" #"Mistralai/Mistral-7B-Instruct-v0.3" #"meta-llama/Llama-3.1-8B-Instruct"   # 可换Qwen/Mistral
+model_name: "Qwen/Qwen2.5-7B-Instruct" #"mistralai/Mistral-7B-Instruct-v0.3" #"meta-llama/Llama-3.1-8B-Instruct"   # 可换Qwen/Mistral
 device: "cuda"
 
 max_new_tokens: 64

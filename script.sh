@@ -1,0 +1,1 @@
+python ./04_step_correctness_eval.py --jsonl "/home/youyang7/projects/lm-evaluation-harness/lm_eval/models/eval_grid/triviaqa_cot_gsm8k_cot_zeroshot/Mistral-7B-Instruct-v0.3_L8_lam-1p5/mistralai__Mistral-7B-Instruct-v0.3/samples_gsm8k_cot_zeroshot_2025-11-19T15-14-31.762424.jsonl"
