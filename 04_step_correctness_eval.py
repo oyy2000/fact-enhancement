@@ -6,6 +6,7 @@ from transformers import AutoTokenizer, AutoModel
 import os
 import matplotlib.pyplot as plt
 PRM_MODEL="Qwen/Qwen2.5-Math-PRM-7B"
+from datetime import datetime
 
 
 tokenizer=AutoTokenizer.from_pretrained(PRM_MODEL,trust_remote_code=True)
@@ -17,6 +18,10 @@ model=AutoModel.from_pretrained(
 ).eval()
 
 STEP_TOKEN = tokenizer.encode("<extra_0>")[0]
+
+def avg_step_length(steps):
+    return np.mean([len(s.split()) for s in steps]) if len(steps)>0 else 0
+
 
 # ---------------- Step Scoring ----------------
 def prm_step_scores(logits, input_ids):
@@ -61,130 +66,119 @@ def analyze_step_errors(scores, thr=0.5):
         else: break
 
     return err_idx, prefix_len
-# ---------------- Main Evaluation ----------------
+    
+
 def run_dataset(jsonl, thr=0.5, label="exact_match"):
     data=[json.loads(l) for l in open(jsonl)]
 
-    F_full=[]              # using all steps
-    F_no_last=[]           # removing last step
-    F_hard=[]              # hard-threshold
-    F_hard_no_last=[]      # hard-threshold + no last step
-    
-    EARLY=[]               # earliest error step
-    PREFIX=[]              # prefix correctness length
-    Y=[]                   # final answer correctness
+    F_full=[];F_no_last=[];F_hard=[];F_hard_no_last=[];
+    EARLY=[]; PREFIX=[]; AVG_LEN=[]; STEPS=[];
+    Y=[]
 
     for i,d in enumerate(data):
-        if d.get("filter") == "strict-match":
-            continue
-        
-        cot = d["resps"][0][0].strip()
+        if d.get("filter") == "strict-match": continue
 
-        # split (fallback to '.' if no newline)
+        cot = d["resps"][0][0].strip()
         steps = [s.strip() for s in cot.split("\n") if s.strip()] \
                 if "\n" in cot else \
                 [s.strip() for s in cot.split(".") if s.strip()]
 
+        if len(steps)==0: continue  # skip broken samples
         scores = eval_cot_prm("", d["arguments"]["gen_args_0"]["arg_0"], steps)
 
-        # ===== metric A: mean of all steps =====
-        Fi_full   = sum(scores)/len(scores) if scores else 0
-        
-        # ===== metric B: remove last reasoning step =====
+        Fi_full = sum(scores)/len(scores)
         Fi_no_last = sum(scores[:-1])/len(scores[:-1]) if len(scores)>1 else Fi_full
-        
-        # ===== metric C: convert to 0/1 by threshold =====
-        Fi_hard = sum([s>thr for s in scores]) / len(scores)
+        Fi_hard = sum(s>thr for s in scores)/len(scores)
+        Fi_hard_no_last = sum(s>thr for s in scores[:-1])/(len(scores)-1) if len(scores)>1 else Fi_hard
 
-        # ===== metric D: convert to 0/1 by threshold + no last step =====
-        Fi_hard_no_last = sum([s>thr for s in scores[:-1]]) / len(scores[:-1]) if len(scores)>1 else Fi_hard
-
-        # ===== NEW: earliest error + prefix correctness =====
         earliest_err, prefix_len = analyze_step_errors(scores, thr)
-        
+        avg_len = avg_step_length(steps)   # ⭐ new
+
         yi = int(d.get(label,0))
 
-        print(f"[{i}] steps={len(steps)} scores={scores}")
-        print(f"  Full={Fi_full:.3f}  NoLast={Fi_no_last:.3f} | Hard={Fi_hard:.3f} HardNoLast={Fi_hard_no_last:.3f}")
-        print(f"  🔹EarliestError={earliest_err}   🔹PrefixCorrectLen={prefix_len}  | Y={yi}\n")
+        print(f"[{i}] steps={len(scores)} | avg_step_len={avg_len:.1f} | scores={scores} | len(steps)={len(steps)}" )
+        print(f"  Full={Fi_full:.3f} NoLast={Fi_no_last:.3f} | Hard={Fi_hard:.3f} HardNL={Fi_hard_no_last:.3f}")
+        print(f"  🔸EarliestError={earliest_err} 🔸PrefixOK={prefix_len} 🔸AvgLen={avg_len} | Y={yi}\n")
 
-        F_full.append(Fi_full)
-        F_no_last.append(Fi_no_last)
-        F_hard.append(Fi_hard)
-        F_hard_no_last.append(Fi_hard_no_last)
-        EARLY.append(earliest_err)
-        PREFIX.append(prefix_len)
+        F_full.append(Fi_full);F_no_last.append(Fi_no_last)
+        F_hard.append(Fi_hard);F_hard_no_last.append(Fi_hard_no_last)
+        EARLY.append(earliest_err);PREFIX.append(prefix_len);AVG_LEN.append(avg_len)
+        STEPS.append(len(steps))
         Y.append(yi)
 
-    # ---- compute & print correlations ----
-    def corr(x): return pearsonr(x,Y)[0], pearsonr(x,Y)[1]
+    # safe corr
+    def c(a): return pearsonr(a,Y)[0] if len(a)>1 else 0
 
-    r1,p1=corr(F_full)
-    r2,p2=corr(F_no_last)
-    r3,p3=corr(F_hard)
-    r4,p4=corr(F_hard_no_last)
+    print("\n━━━━ Aggregate ━━━━")
+    print(f"Step length mean = {np.mean(AVG_LEN):.2f}")
+    print("━━━━━━━━━━━━━━━━━━\n")
 
-    print("\n━━━━━━━━ Result Summary ━━━━━━━━")
-    print(f"🔵 Full-step corr     = {r1:.4f} (p={p1:.2e})")
-    print(f"🟠 Without-final-step = {r2:.4f} (p={p2:.2e})")
-    print(f"🟥 Hard-label corr    = {r3:.4f} (p={p3:.2e})")
-    print(f"🟣 Hard-label NoLast  = {r4:.4f} (p={p4:.2e})")
-    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-
-    return F_full, F_no_last, F_hard, F_hard_no_last, EARLY, PREFIX, Y
+    return F_full, F_no_last, F_hard, F_hard_no_last, EARLY, PREFIX, AVG_LEN, STEPS, Y
 
 
-
-
+import glob, json, os, numpy as np
 # ===================== CONFIG =====================
-BASE_DIR = "/home/youyang7/projects/lm-evaluation-harness/lm_eval/models/eval_grid_11_18/triviaqa_cot_gsm8k_cot_zeroshot"
-
-L_values   = ["L8", "L16", "L24"]
-lam_values = ["BASELINE","lam0p5","lam1p0","lam1p5","lam2p0"]   # 横轴维度
+BASE_DIR = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid/gsm8k_cot_zeroshot"
+lam_values = ["lam-0p5","lam-1p0","lam-1p5","lam-2p0", "BASELINE","lam0p5","lam1p0","lam1p5","lam2p0"]   # 横轴维度
 
 # λ label 显示用
 lam_plot_labels = {
+    "lam-2p0":"-2.0",
+    "lam-1p5":"-1.5",
+    "lam-1p0":"-1.0",
+    "lam-0p5":"-0.5",
     "BASELINE":"0.0",
     "lam0p5":"0.5",
     "lam1p0":"1.0",
     "lam1p5":"1.5",
     "lam2p0":"2.0"
 }
+
+L_values   = ["L24"]
+SAVE_PATH = f"prm_results_live_dump_{datetime.now().strftime('%Y%m%d')}.json"   # 你可以换路径
 # ==================================================
+model_names = {"Llama-3.1-8B-Instruct": "meta-llama__Llama-3.1-8B-Instruct"}
+        #    "Qwen2.5-7B-Instruct": "Qwen__Qwen2.5-7B-Instruct"}
+results = {}
 
-results = {}   # results[L][lam] = dict of metrics
+for model_name in model_names:
+    results.setdefault(model_name, {})
 
-for L in L_values:
-    results[L] = {}
-    for lam in lam_values:
+    for L in L_values:
+        results[model_name].setdefault(L, {})
 
-        # ===== 生成 JSONL 路径 =====
-        folder = f"Mistral-7B-Instruct-v0.3_{L}_{lam}"
-        jsonl_path = f"{BASE_DIR}/{folder}/mistralai__Mistral-7B-Instruct-v0.3/" \
-                     f"samples_gsm8k_cot_zeroshot_*.jsonl"
+        for lam in lam_values:
+            folder = f"{BASE_DIR}/{model_name}_{L}_{lam}/{model_names[model_name]}/"
+            pattern = os.path.join(folder, "samples_gsm8k_cot_zeroshot_*.jsonl")
+            print(folder)
+            files = sorted(glob.glob(pattern))  # <-- Only matching correct jsonl names
+            
+            if len(files)==0:
+                print(f"⚠ No jsonl found for {L}-{lam}")
+                continue
+            
+            # ⭐ Pick newest file
+            jsonl = files[-1]
+            print(f"🚀 Running {L}-{lam}  |  using latest JSONL:\n → {jsonl}\n")
 
-        # 递归查找文件（因为你文件名带时间戳）
-        files = [os.path.join(dp,f) 
-                 for dp,_,fs in os.walk(f"{BASE_DIR}/{folder}") 
-                 for f in fs if f.endswith(".jsonl")]
+            F_full, F_no_last, F_hard, F_hard_no_last, EARLY, PREFIX, AVG_LEN, STEPS, Y = run_dataset(jsonl)
+            EARLY_clean = [e if e is not None else (max([x for x in EARLY if x is not None])+1) 
+                for e in EARLY]
+            results[model_name][L][lam] = {
+                "corr_full"       : float(pearsonr(F_full, Y)[0]),
+                "corr_hard"       : float(pearsonr(F_hard, Y)[0]),
+                "corr_avg_prefix" : float(pearsonr(PREFIX, Y)[0]),
+                "corr_avg_steps"  : float(pearsonr(STEPS, Y)[0]),
+                "corr_avg_first_error"      : float(pearsonr(EARLY_clean, Y)[0]),
+                "avg_prefix"      : float(np.mean(PREFIX)),
+                "avg_first_error" : float(np.mean([e for e in EARLY if e is not None])),
+                "avg_steps"       : float(np.mean(STEPS)),
+                "file_used"       : jsonl,  # ⭐ Save for traceability
+                "Y"               : Y
+            }
 
-        if len(files)==0:
-            print(f"⚠ No file found for {L}-{lam}")
-            continue
+            # 实时写盘（避免中断损失结果）
+            with open(SAVE_PATH, "w") as f: json.dump(results, f, indent=4)
+            print(f"💾 Saved to → {SAVE_PATH}\n")
 
-        jsonl = sorted(files)[-1]   # 选最新文件  ← 你时间戳命名恰好适配
-        print(f"\n🚀 Running {L}-{lam}\n -> {jsonl}\n")
-
-        # ===== 调用你的评估函数 =====
-        F_full, F_no_last, F_hard, F_hard_no_last, EARLY, PREFIX, Y = run_dataset(jsonl)
-
-        # 保存结果
-        results[L][lam] = {
-            "corr_full"       : pearsonr(F_full, Y)[0],
-            "corr_no_last"    : pearsonr(F_no_last, Y)[0],
-            "corr_hard"       : pearsonr(F_hard, Y)[0],
-            "corr_hard_nl"    : pearsonr(F_hard_no_last, Y)[0],
-            "avg_prefix"      : np.mean([p for p in PREFIX if p is not None]),
-            "avg_first_error" : np.mean([e for e in EARLY if e is not None])
-        }
 
