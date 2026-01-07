@@ -1,20 +1,34 @@
 import json
 import glob
+import os
+
+FOLDERS = [
+    # "./prm_out_qwen_family_3",
+    "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/prm_out_qwen_family_14btos",
+]
 
 final_results = {}
-FOLDER = "./prm_out_qwen_family"
-#"./prm_out/"   # ⭐ 你想要的 folder
+seen = set()  # (model, L, lam)
 
-for f in sorted(glob.glob(f"{FOLDER}/results_chunk_*.json")):
-    part = json.load(open(f))
-    for model in part:
-        final_results.setdefault(model, {})
-        for L in part[model]:
-            final_results[model].setdefault(L, {})
-            for lam in part[model][L]:
-                final_results[model][L][lam] = part[model][L][lam]
+for folder in FOLDERS:
+    files = sorted(glob.glob(os.path.join(folder, "results_chunk_*.json")))
+    print(f"📂 Scanning {folder}, found {len(files)} files")
 
-with open(f"{FOLDER}/results_merged.json", "w") as f:
+    for f in files:
+        part = json.load(open(f))
+        for model in part:
+            final_results.setdefault(model, {})
+            for L in part[model]:
+                final_results[model].setdefault(L, {})
+                for lam, entry in part[model][L].items():
+                    key = (model, L, lam)
+                    if key in seen:
+                        continue  # 🚫 去重
+                    seen.add(key)
+                    final_results[model][L][lam] = entry
+
+OUT = f"{FOLDERS[0]}/results_merged.json"
+with open(OUT, "w") as f:
     json.dump(final_results, f, indent=4)
 
-print(f"🎉 All chunks merged → {FOLDER}/results_merged.json")
+print(f"🎉 Merged {len(seen)} unique (model, L, λ) → {OUT}")

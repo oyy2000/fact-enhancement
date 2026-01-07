@@ -1,47 +1,51 @@
-# run_prm_single.py
-import argparse, json, numpy as np
-from scipy.stats import pearsonr
+import argparse
+import json
 from prm_eval_core import run_dataset
 
+# ============================================================
+# ARGPARSE
+# ============================================================
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--model")
-parser.add_argument("--layer")
-parser.add_argument("--lam")
-parser.add_argument("--jsonl")
-parser.add_argument("--out")
+parser.add_argument("--model_name", required=True, help="Logical model name (for JSON key)")
+parser.add_argument("--gen_model", required=True, help="HF repo id for decoder tokenizer")
+parser.add_argument("--layer", required=True)
+parser.add_argument("--lam", required=True)
+parser.add_argument("--jsonl", required=True)
+parser.add_argument("--out", required=True)
+parser.add_argument("--eval_start", type=int, default=100)
 args = parser.parse_args()
 
-# Evaluate
-F_full, F_no_last, F_hard, F_hard_no_last, EARLY, PREFIX, AVG_LEN, STEPS, Y, STEP_SCORES_ALL, STEP_TEXTS_ALL = run_dataset(args.jsonl)
+# ============================================================
+# RUN PRM EVAL (RECORD ONLY)
+# ============================================================
 
-EARLY_clean = [
-    e if e is not None else (max([x for x in EARLY if x is not None])+1)
-    for e in EARLY
-]
+Y, STEP_SCORES_ALL, STEP_TEXTS_ALL, STEP_TOKEN_LEN = run_dataset(
+    jsonl_path=args.jsonl,
+    gen_model_name=args.gen_model,
+    eval_start=args.eval_start
+)
+
+# ============================================================
+# SAVE RESULT (NO METRICS, ONLY FACTS)
+# ============================================================
 
 res = {
-    args.model: {
+    args.model_name: {
         args.layer: {
             args.lam: {
-                "corr_full": float(pearsonr(F_full, Y)[0]),
-                "corr_hard": float(pearsonr(F_hard, Y)[0]),
-                "corr_avg_prefix": float(pearsonr(PREFIX, Y)[0]),
-                "corr_avg_steps": float(pearsonr(STEPS, Y)[0]),
-                "corr_avg_first_error": float(pearsonr(EARLY_clean, Y)[0]),
-                
-                "avg_prefix": float(np.mean(PREFIX)),
-                "avg_first_error": float(np.mean([e for e in EARLY if e is not None])),
-                "avg_steps": float(np.mean(STEPS)),
                 "file_used": args.jsonl,
+                "gen_model": args.gen_model,
+
+                # raw records only
                 "Y": Y,
                 "step_scores": STEP_SCORES_ALL,
-                "step_texts": STEP_TEXTS_ALL
+                "step_texts": STEP_TEXTS_ALL,
+                "step_token_len": STEP_TOKEN_LEN
             }
         }
     }
 }
-
-
 
 with open(args.out, "w") as f:
     json.dump(res, f, indent=2)

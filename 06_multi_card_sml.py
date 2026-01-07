@@ -1,69 +1,116 @@
-# run_master.py
-import os, json, glob, multiprocessing as mp
+import os
+import json
+import glob
+import multiprocessing as mp
 
-# ===== configs ==================================================
+# ============================================================
+# CONFIGS
+# ============================================================
 
-FOLDER = "./prm_out_qwen_family"   # ⭐ 你想要的 folder
+FOLDER = "./prm_out_qwen_family_14btos"
 os.makedirs(FOLDER, exist_ok=True)
 
+NUM_GPUS = 8
+GPU_IDS = [0,1,2,3,4,5,6,7]
 
-NUM_GPUS = 4
-GPU_IDS = [0,2,3, 4]# list(range(NUM_GPUS))
+BASE_DIR = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_14btos/gsm8k_cot_zeroshot"
 
-BASE_DIR = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_familiy/gsm8k_cot_zeroshot"
-L_values = ["L8"]
-lam_values = ["BASELINE"]   # 横轴维度
+lam_values = [
+    "lam-0p1","lam-0p2","lam-0p3", #,"lam-0p4", "lam-0p5",
+    "BASELINE",
+    "lam0p1","lam0p2","lam0p3"#,"lam0p4", "lam0p5"
+]
 
-model_names = {
-    # "Qwen2.5-0.5B-Instruct":  "Qwen__Qwen2.5-0.5B-Instruct",
-    # "Qwen2.5-1.5B-Instruct":  "Qwen__Qwen2.5-1.5B-Instruct",
-    # "Qwen2.5-3B-Instruct":  "Qwen__Qwen2.5-3B-Instruct",
-    # "Qwen2.5-7B-Instruct":  "Qwen__Qwen2.5-7B-Instruct",
-    "Qwen2.5-14B-Instruct":  "Qwen__Qwen2.5-14B-Instruct",
+# lam_values = [
+#     "lam-0p5","lam-1p0","lam-1p5","lam-2p0",
+#     "BASELINE",
+#     "lam0p5","lam1p0","lam1p5","lam2p0"
+# ]
+
+# ============================================================
+# MODEL DEFINITIONS
+# ============================================================
+
+# logical model name -> HF repo id
+MODEL_MAP = {
+    "Qwen2.5-7B-Instruct":   "Qwen/Qwen2.5-7B-Instruct",
+    "Qwen2.5-3B-Instruct":   "Qwen/Qwen2.5-3B-Instruct",
+    "Qwen2.5-1.5B-Instruct": "Qwen/Qwen2.5-1.5B-Instruct",
+    # "Qwen2.5-14B-Instruct":  "Qwen/Qwen2.5-14B-Instruct",
 }
 
-# ===== prepare list of jobs ======================================
+# logical model name -> layer indices
+MODEL_TO_LAYERS = {
+    "Qwen2.5-7B-Instruct":   [14, 24, 28],
+    "Qwen2.5-1.5B-Instruct": [14, 24, 28],
+    "Qwen2.5-3B-Instruct":   [18, 32, 36],
+    # "Qwen2.5-14B-Instruct":  [16, 24, 32],
+}
+
+# folder names produced by lm-eval
+MODEL_FOLDER_MAP = {
+    k: f"Qwen__{k}" for k in MODEL_MAP
+}
+
+# ============================================================
+# PREPARE JOB LIST
+# ============================================================
 
 jobs = []
 
-for model_name, model_folder in model_names.items():
-    for L in L_values:
+for model_name, gen_model_name in MODEL_MAP.items():
+
+    if model_name not in MODEL_TO_LAYERS:
+        print(f"⚠ No layer config for model: {model_name}")
+        continue
+
+    model_folder = MODEL_FOLDER_MAP[model_name]
+    layer_indices = MODEL_TO_LAYERS[model_name]
+
+    for layer_idx in layer_indices:
+        L = f"L{layer_idx}"
+
         for lam in lam_values:
             folder = f"{BASE_DIR}/{model_name}_{L}_{lam}/{model_folder}/"
+            print(folder)
             pattern = os.path.join(folder, "samples_gsm8k_cot_zeroshot_*.jsonl")
 
             files = sorted(glob.glob(pattern))
-            if len(files)==0:
+            if len(files) == 0:
                 print(f"⚠ Missing: {model_name} {L} {lam}")
                 continue
 
             jsonl_file = files[-1]
-
-            jobs.append((model_name, L, lam, jsonl_file))
+            jobs.append((model_name, gen_model_name, L, lam, jsonl_file))
 
 print(f"Total jobs = {len(jobs)}")
 
+# ============================================================
+# WORKER
+# ============================================================
 
-# ===== worker process ============================================
 def worker(job_idx, job, gpu_id):
-    model_name, L, lam, jsonl = job
+    model_name, gen_model_name, L, lam, jsonl = job
     out_file = f"{FOLDER}/results_chunk_{job_idx}.json"
 
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
 
     cmd = (
         f"python 07_run_prm_single.py "
-        f"--model '{model_name}' "
+        f"--model_name '{model_name}' "
+        f"--gen_model '{gen_model_name}' "
         f"--layer {L} "
         f"--lam {lam} "
         f"--jsonl {jsonl} "
         f"--out {out_file}"
     )
+
     print(f"[GPU{gpu_id}] → {cmd}")
     os.system(cmd)
 
-
-# ===== launch pool ===============================================
+# ============================================================
+# LAUNCH
+# ============================================================
 
 if __name__ == "__main__":
     pool = mp.Pool(NUM_GPUS)
@@ -77,10 +124,13 @@ if __name__ == "__main__":
 
     print("✔ All GPU jobs finished.")
 
-    # ===== merge chunks ===========================================
+    # ============================================================
+    # MERGE RESULTS
+    # ============================================================
+
     final = {}
 
-    for f in sorted(glob.glob("results_chunk_*.json")):
+    for f in sorted(glob.glob(f"{FOLDER}/results_chunk_*.json")):
         part = json.load(open(f))
 
         for model in part:
@@ -90,7 +140,8 @@ if __name__ == "__main__":
                 for lam in part[model][L]:
                     final[model][L][lam] = part[model][L][lam]
 
-    with open("results_merged.json", "w") as f:
+    merged_path = f"{FOLDER}/results_merged.json"
+    with open(merged_path, "w") as f:
         json.dump(final, f, indent=2)
 
-    print("🎉 Final merged JSON → results_merged.json")
+    print(f"🎉 Final merged JSON → {merged_path}")

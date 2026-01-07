@@ -1,90 +1,111 @@
-# prm_eval_core.py
-import json, torch
+import json
+import torch
 import numpy as np
 import torch.nn.functional as F
-from scipy.stats import pearsonr
 from transformers import AutoTokenizer, AutoModel
 import os
 import random
 
 # ============================================================
-# 🔒 FIXED RANDOM SEED FOR FULL DETERMINISM
+# 🔒 FIXED RANDOM SEED
 # ============================================================
 SEED = 42
-
 random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
-torch.cuda.manual_seed(SEED)
 torch.cuda.manual_seed_all(SEED)
 
-# Make CuDNN deterministic
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-# Disable some HF randomness (tokenization dropout etc)
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["PYTHONHASHSEED"] = str(SEED)
 
-PRM_MODEL="Qwen/Qwen2.5-Math-PRM-7B"
+# ============================================================
+# PRM MODEL (ONLY FOR SCORING)
+# ============================================================
+PRM_MODEL = "Qwen/Qwen2.5-Math-PRM-7B"
 
-# Global PRM model load
-tokenizer = AutoTokenizer.from_pretrained(PRM_MODEL, trust_remote_code=True)
-model = AutoModel.from_pretrained(
+prm_tokenizer = AutoTokenizer.from_pretrained(
+    PRM_MODEL, trust_remote_code=True
+)
+prm_model = AutoModel.from_pretrained(
     PRM_MODEL,
     torch_dtype=torch.bfloat16,
     device_map="auto",
     trust_remote_code=True
 ).eval()
 
-STEP_TOKEN = tokenizer.encode("<extra_0>")[0]
+STEP_TOKEN = prm_tokenizer.encode("<extra_0>")[0]
 
+# ============================================================
+# PRM SCORING
+# ============================================================
 def prm_step_scores(logits, input_ids):
     probs = F.softmax(logits, dim=-1)
     idx = (input_ids == STEP_TOKEN).nonzero(as_tuple=True)[1]
     return [
-        probs[0, idx[i]:idx[i+1], 1].mean().item()
-        for i in range(len(idx)-1)
+        probs[0, idx[i]:idx[i + 1], 1].mean().item()
+        for i in range(len(idx) - 1)
     ]
 
-def eval_cot_prm(system, query, steps):
+
+def eval_cot_prm(query, steps):
+    """
+    Only used to score steps, NOT for token counting
+    """
     text = "<extra_0>".join(steps) + "<extra_0>"
     msgs = [
-        {"role": "system", "content": system},
         {"role": "user", "content": query},
         {"role": "assistant", "content": text}
     ]
-    conv = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=False)
-    ids  = tokenizer.encode(conv, return_tensors="pt").to(model.device)
+    conv = prm_tokenizer.apply_chat_template(
+        msgs, tokenize=False, add_generation_prompt=False
+    )
+    ids = prm_tokenizer.encode(conv, return_tensors="pt").to(prm_model.device)
+
     with torch.no_grad():
-        out = model(input_ids=ids, use_cache=False)
+        out = prm_model(input_ids=ids, use_cache=False)
+
     return prm_step_scores(out[0], ids)
 
-def analyze_step_errors(scores, thr=0.5):
-    err_idx = next((i+1 for i,s in enumerate(scores) if s < thr), None)
-    prefix_len = 0
-    for s in scores:
-        if s > thr: prefix_len += 1
-        else: break
-    return err_idx, prefix_len
 
-def avg_step_length(steps):
-    return np.mean([len(s.split()) for s in steps]) if len(steps)>0 else 0
+# ============================================================
+# MAIN DATASET RUNNER (RECORD ONLY)
+# ============================================================
+def run_dataset(jsonl_path, gen_model_name, label="exact_match", eval_start=100):
+    """
+    jsonl_path: path to lm-eval generated jsonl
+    gen_model_name: HF repo id of the model that generated the CoT
+    eval_start: start evaluating from this sample index (default=100)
+    """
 
-def run_dataset(jsonl, thr=0.5, label="exact_match"):
-    data = [json.loads(l) for l in open(jsonl)]
+    # decoder tokenizer (for token counting)
+    gen_tokenizer = AutoTokenizer.from_pretrained(
+        gen_model_name,
+        trust_remote_code=True,
+        use_fast=True
+    )
 
-    F_full=[]; F_no_last=[]; F_hard=[]; F_hard_no_last=[];
-    EARLY=[]; PREFIX=[]; AVG_LEN=[]; STEPS=[];
-    Y=[]
+    data = [json.loads(l) for l in open(jsonl_path)]
 
-    STEP_SCORES_ALL = []   # ⭐ new
-    STEP_TEXTS_ALL = []    # ⭐ new
+    Y = []
+    STEP_SCORES_ALL = []
+    STEP_TEXTS_ALL = []
+    STEP_TOKEN_LEN = []
 
-    for d in data:
+    # ============================================================
+    # MAIN LOOP (START FROM eval_start)
+    # ============================================================
+    for idx, d in enumerate(data):
+
+        if idx < eval_start:
+            continue
+
         if d.get("filter") == "strict-match":
             continue
 
+        # ---- extract CoT ----
         cot = d["resps"][0][0].strip()
 
         steps = (
@@ -96,59 +117,44 @@ def run_dataset(jsonl, thr=0.5, label="exact_match"):
         if len(steps) == 0:
             continue
 
-        # ---- safe eval, skip failure samples ----
+        # ---- PRM scoring ----
         try:
-            scores = eval_cot_prm("", d["arguments"]["gen_args_0"]["arg_0"], steps)
+            scores = eval_cot_prm(
+                d["arguments"]["gen_args_0"]["arg_0"],
+                steps
+            )
         except Exception as e:
-            print(f"[WARN] PRM failed for one sample → skipping. Error: {e}")
+            print(f"[WARN] PRM failed → skip sample {idx}. {e}")
             continue
 
         if len(scores) == 0:
             continue
 
-        # ---- store raw step info ----
-        STEP_SCORES_ALL.append(scores)
+        # ---- record raw facts ----
         STEP_TEXTS_ALL.append(steps)
+        STEP_SCORES_ALL.append(scores)
 
-        # ---- compute metrics ----
-        Fi_full = sum(scores)/len(scores)
-        Fi_no_last = sum(scores[:-1])/len(scores[:-1]) if len(scores)>1 else Fi_full
-        Fi_hard = sum(s>thr for s in scores)/len(scores)
-        Fi_hard_no_last = sum(s>thr for s in scores[:-1])/(len(scores)-1) if len(scores)>1 else Fi_hard
+        step_token_lens = [
+            len(gen_tokenizer.encode(s, add_special_tokens=False))
+            for s in steps
+        ]
+        STEP_TOKEN_LEN.append(step_token_lens)
 
-        earliest_err, prefix_len = analyze_step_errors(scores, thr)
-        avg_len = avg_step_length(steps)
-        yi = int(d.get(label, 0))
+        Y.append(int(d.get(label, 0)))
 
-        # ---- append results ----
-        F_full.append(Fi_full)
-        F_no_last.append(Fi_no_last)
-        F_hard.append(Fi_hard)
-        F_hard_no_last.append(Fi_hard_no_last)
-        EARLY.append(earliest_err)
-        PREFIX.append(prefix_len)
-        AVG_LEN.append(avg_len)
-        STEPS.append(len(steps))
-        Y.append(yi)
-
-    # ---- ensure all lengths equal ----
-    L = len(F_full)
+    # ============================================================
+    # SANITY CHECK
+    # ============================================================
+    L = len(Y)
     assert all(len(x) == L for x in [
-        F_no_last, F_hard, F_hard_no_last,
-        EARLY, PREFIX, AVG_LEN, STEPS, Y,
-        STEP_SCORES_ALL, STEP_TEXTS_ALL
-    ]), "❌ Length mismatch detected! Some sample was inconsistently added."
+        STEP_SCORES_ALL,
+        STEP_TEXTS_ALL,
+        STEP_TOKEN_LEN
+    ]), "❌ Length mismatch detected!"
 
     return (
-        F_full,
-        F_no_last,
-        F_hard,
-        F_hard_no_last,
-        EARLY,
-        PREFIX,
-        AVG_LEN,
-        STEPS,
         Y,
-        STEP_SCORES_ALL,   # ⭐ added
-        STEP_TEXTS_ALL     # ⭐ added
+        STEP_SCORES_ALL,
+        STEP_TEXTS_ALL,
+        STEP_TOKEN_LEN
     )
