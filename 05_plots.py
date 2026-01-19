@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 import os
 from scipy.stats import pearsonr
 from transformers import AutoTokenizer
-
+from matplotlib.lines import Line2D
+import matplotlib.pyplot as plt
+import numpy as np
 
 # ============================================================
 # CONFIG
@@ -21,14 +23,14 @@ def get_layer_color_map(layers):
     colors = plt.cm.tab10(np.linspace(0, 1, len(layers)))
     return {L: colors[i] for i, L in enumerate(layers)}
 
-SAVE_DIR = "prm_out_qwen_family_14btos"
+SAVE_DIR = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/prm_out_qwen_family_calibrated_prm_calibrated_split_calibrated_1/"
 MODEL_FILES = [
-    f"/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/{SAVE_DIR}/results_merged.json",
+    f"{SAVE_DIR}/results_merged.json",
     # 你可以继续添加其它模型族
     # "/path/to/prm_out_llama/results_merged.json",
 ]
 
-SAVE_ROOT = f"/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/{SAVE_DIR}"
+SAVE_ROOT = f"{SAVE_DIR}"
 os.makedirs(SAVE_ROOT, exist_ok=True)
 os.makedirs(f"{SAVE_ROOT}/correct_wrong", exist_ok=True)
 os.makedirs(f"{SAVE_ROOT}/scatter", exist_ok=True)
@@ -304,7 +306,6 @@ def plot_all():
 
             for L in layers:
                 lambdas = detect_lambdas(model_data, L)
-
                 lam_vals = []
                 mean_vals = []
 
@@ -674,8 +675,8 @@ def plot_avg_tokens_vs_acc():
         for L in layers:
             for lam, entry in model_data[L].items():
                 avg_tokens = np.mean([
-                    np.mean([len(t.split()) for t in steps])
-                    for steps in entry["step_texts"]
+                    np.mean(steps)
+                    for steps in entry["step_token_len"]
                 ])
                 acc = np.mean(entry["Y"])
                 label = model_name if model_name not in seen_models else None
@@ -886,11 +887,10 @@ def per_step_mean(step_scores, Y=None, max_steps=None):
             means[k] = float(np.mean(vals))
     return means, counts
 
-
 def plot_per_step_avg_correctness(max_steps=15):
     """
     For each (model, layer, lambda), plot mean step correctness vs step index.
-    Also supports Correct-only and Wrong-only curves on the same plot.
+    Fixed: Generate specific x-axis ranges for Correct/Wrong curves to avoid shape mismatch.
     """
     outdir = f"{SAVE_ROOT}/per_step_avg"
     os.makedirs(outdir, exist_ok=True)
@@ -910,6 +910,7 @@ def plot_per_step_avg_correctness(max_steps=15):
                 step_scores_corr = [step_scores_all[i] for i in range(len(step_scores_all)) if Y[i] == 1]
                 step_scores_wrong = [step_scores_all[i] for i in range(len(step_scores_all)) if Y[i] == 0]
 
+                # 计算均值
                 mean_all, n_all = per_step_mean(step_scores_all, max_steps=max_steps)
                 mean_corr, n_corr = per_step_mean(step_scores_corr, max_steps=max_steps)
                 mean_wrong, n_wrong = per_step_mean(step_scores_wrong, max_steps=max_steps)
@@ -917,14 +918,21 @@ def plot_per_step_avg_correctness(max_steps=15):
                 if len(mean_all) == 0:
                     continue
 
-                steps = np.arange(1, len(mean_all) + 1)
-
                 plt.figure(figsize=(9, 5))
-                plt.plot(steps, mean_all, marker="o", linewidth=2, label=f"All (n@1={n_all[0]})")
+
+                # 1. Plot ALL (为 All 生成专属 steps)
+                steps_all = np.arange(1, len(mean_all) + 1)
+                plt.plot(steps_all, mean_all, marker="o", linewidth=2, label=f"All (n@1={n_all[0]})")
+
+                # 2. Plot CORRECT (为 Correct 生成专属 steps)
                 if len(mean_corr) > 0:
-                    plt.plot(steps, mean_corr, marker="s", linewidth=2, label=f"Correct (n@1={n_corr[0]})")
+                    steps_corr = np.arange(1, len(mean_corr) + 1)
+                    plt.plot(steps_corr, mean_corr, marker="s", linewidth=2, label=f"Correct (n@1={n_corr[0]})")
+
+                # 3. Plot WRONG (为 Wrong 生成专属 steps - 修复点)
                 if len(mean_wrong) > 0:
-                    plt.plot(steps, mean_wrong, marker="x", linewidth=2, label=f"Wrong (n@1={n_wrong[0]})")
+                    steps_wrong = np.arange(1, len(mean_wrong) + 1)  # <--- FIX: 独立生成 x 轴
+                    plt.plot(steps_wrong, mean_wrong, marker="x", linewidth=2, label=f"Wrong (n@1={n_wrong[0]})")
 
                 plt.axhline(THRESHOLD, linestyle="--", linewidth=1.2, label=f"thr={THRESHOLD}")
                 plt.xlabel("Step k")
@@ -933,10 +941,6 @@ def plot_per_step_avg_correctness(max_steps=15):
                 plt.grid(alpha=0.25)
                 plt.legend()
 
-                # 可选：把每一步有效样本数标出来（越往后会掉）
-                # 你也可以改成 log 或者只画 n_all
-                # plt.twinx().plot(steps, n_all, linestyle="--", marker=".", label="n_all")
-
                 fname = f"{_safe_name(model_name)}_L{L}_{_safe_name(lam)}_per_step_avg.png"
                 out_path = os.path.join(outdir, fname)
                 plt.tight_layout()
@@ -944,9 +948,406 @@ def plot_per_step_avg_correctness(max_steps=15):
                 plt.close()
                 print("Saved:", out_path)
 
+
 # ============================================================
-# Run All
+#  C.2 More Special plots (Tokens, Errors, Steps, Prefix)
 # ============================================================
+
+def plot_avg_total_tokens_vs_acc():
+    """
+    Plots the Average Total Tokens per Solution (sum of all steps) vs Accuracy.
+    Useful to see if longer solutions correlate with lower accuracy (reasoning fatigue).
+    """
+    plt.figure(figsize=(10,6))
+    seen_models = set()
+
+    for model_name, model_data in model_results.items():
+        layers = detect_layers(model_data)
+
+        for L in layers:
+            lambdas = detect_lambdas(model_data, L)
+            for lam in lambdas:
+                entry = model_data[L][lam]
+                
+                # Calculate total tokens per sample (sum of tokens in all steps)
+                # Using split() as a proxy for tokens to be consistent with your previous code
+                total_tokens_per_sample = [
+                    np.sum(steps) for steps in entry["step_token_len"]
+                ]
+                
+                avg_total_tokens = np.mean(total_tokens_per_sample)
+                acc = np.mean(entry["Y"])
+                
+                label = model_name if model_name not in seen_models else None
+                seen_models.add(model_name)
+
+                plt.scatter(
+                    avg_total_tokens,
+                    acc,
+                    color=MODEL_COLOR_MAP[model_name],
+                    marker=MODEL_MARKER_MAP[model_name],
+                    s=140,
+                    alpha=0.85,
+                    label=label
+                )
+
+    plt.xlabel("Avg Total Tokens per Solution")
+    plt.ylabel("Accuracy")
+    plt.title("Avg Total Tokens (Solution Length) vs Accuracy")
+    plt.grid(alpha=0.3)
+    plt.legend(title="Model")
+
+    out_path = f"{SAVE_ROOT}/special/avg_total_tokens_vs_accuracy.png"
+    plt.savefig(out_path, dpi=300)
+    plt.close()
+    print("Saved:", out_path)
+
+
+def plot_avg_steps_vs_acc():
+    """
+    Plots Average Number of Steps (Depth) vs Accuracy.
+    """
+    plt.figure(figsize=(10,6))
+    seen_models = set()
+
+    for model_name, model_data in model_results.items():
+        layers = detect_layers(model_data)
+
+        for L in layers:
+            lambdas = detect_lambdas(model_data, L)
+            for lam in lambdas:
+                entry = model_data[L][lam]
+                
+                # Calculate number of steps per sample
+                num_steps_per_sample = [len(s) for s in entry["step_token_len"]]
+                
+                avg_steps = np.mean(num_steps_per_sample)
+                acc = np.mean(entry["Y"])
+                
+                label = model_name if model_name not in seen_models else None
+                seen_models.add(model_name)
+
+                plt.scatter(
+                    avg_steps,
+                    acc,
+                    color=MODEL_COLOR_MAP[model_name],
+                    marker=MODEL_MARKER_MAP[model_name],
+                    s=140,
+                    alpha=0.85,
+                    label=label
+                )
+
+    plt.xlabel("Avg Number of Steps")
+    plt.ylabel("Accuracy")
+    plt.title("Avg Step Count (Depth) vs Accuracy")
+    plt.grid(alpha=0.3)
+    plt.legend(title="Model")
+
+    out_path = f"{SAVE_ROOT}/special/avg_num_steps_vs_accuracy.png"
+    plt.savefig(out_path, dpi=300)
+    plt.close()
+    print("Saved:", out_path)
+
+
+def plot_avg_error_steps_vs_acc():
+    """
+    Plots Average Number of 'Error Steps' (Score < THRESHOLD) per solution vs Accuracy.
+    """
+    plt.figure(figsize=(10,6))
+    seen_models = set()
+
+    for model_name, model_data in model_results.items():
+        layers = detect_layers(model_data)
+
+        for L in layers:
+            lambdas = detect_lambdas(model_data, L)
+            for lam in lambdas:
+                entry = model_data[L][lam]
+                
+                # Count steps below threshold per sample
+                error_counts = [
+                    sum(1 for score in steps if score < THRESHOLD)
+                    for steps in entry["step_scores"]
+                ]
+                
+                avg_errors = np.mean(error_counts)
+                acc = np.mean(entry["Y"])
+                
+                label = model_name if model_name not in seen_models else None
+                seen_models.add(model_name)
+
+                plt.scatter(
+                    avg_errors,
+                    acc,
+                    color=MODEL_COLOR_MAP[model_name],
+                    marker=MODEL_MARKER_MAP[model_name],
+                    s=140,
+                    alpha=0.85,
+                    label=label
+                )
+
+    plt.xlabel(f"Avg Error Steps (Score < {THRESHOLD})")
+    plt.ylabel("Accuracy")
+    plt.title(f"Avg Error Steps per Solution vs Accuracy")
+    plt.grid(alpha=0.3)
+    plt.legend(title="Model")
+
+    out_path = f"{SAVE_ROOT}/special/avg_error_steps_vs_accuracy.png"
+    plt.savefig(out_path, dpi=300)
+    plt.close()
+    print("Saved:", out_path)
+
+
+def plot_score_vs_accumulated_tokens(max_tokens=2048, bins=20):
+    """
+    Plots PRM Score vs Accumulated Prefix Length (in tokens).
+    This answers: "Does the model's reasoning confidence drop as the context grows?"
+    """
+    plt.figure(figsize=(10,6))
+    
+    # We bin the accumulated token counts to make the line plot readable
+    token_bins = np.linspace(0, max_tokens, bins)
+    bin_centers = 0.5 * (token_bins[:-1] + token_bins[1:])
+    
+    for model_name, model_data in model_results.items():
+        layers = detect_layers(model_data)
+        # Just pick the best or middle layer/lambda to avoid clutter, 
+        # or aggregate across all configs for that model. 
+        # Here we aggregate all data for the model to see general trend.
+        
+        all_accum_tokens = []
+        all_scores = []
+        
+        for L in layers:
+            lambdas = detect_lambdas(model_data, L)
+            for lam in lambdas:
+                entry = model_data[L][lam]
+                
+                for steps_text, steps_score in zip(entry["step_texts"], entry["step_scores"]):
+                    current_acc = 0
+                    for text, score in zip(steps_text, steps_score):
+                        t_len = len(text.split())
+                        # Plot score against the context length *before* this step (or including)
+                        all_accum_tokens.append(current_acc) 
+                        all_scores.append(score)
+                        current_acc += t_len
+
+        if not all_scores:
+            continue
+
+        # Binning statistics
+        bin_means = []
+        for i in range(len(token_bins)-1):
+            idx = (all_accum_tokens >= token_bins[i]) & (all_accum_tokens < token_bins[i+1])
+            vals = np.array(all_scores)[idx]
+            if len(vals) > 0:
+                bin_means.append(np.mean(vals))
+            else:
+                bin_means.append(np.nan)
+        
+        plt.plot(
+            bin_centers, 
+            bin_means, 
+            marker=MODEL_MARKER_MAP.get(model_name, "o"),
+            color=MODEL_COLOR_MAP.get(model_name, "blue"),
+            label=model_name,
+            linewidth=2,
+            alpha=0.8
+        )
+
+    plt.xlabel("Accumulated Context Length (Tokens)")
+    plt.ylabel("Avg PRM Step Score")
+    plt.title("Reasoning Confidence vs Context Length")
+    plt.legend()
+    plt.grid(alpha=0.3)
+    
+    out_path = f"{SAVE_ROOT}/special/score_vs_accumulated_tokens.png"
+    plt.savefig(out_path, dpi=300)
+    plt.close()
+    print("Saved:", out_path)
+
+
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+
+# ============================================================
+#  C. Unified Scatter Plots (Correct vs Wrong Split)
+# ============================================================
+def get_metric_means_split(entry, metric_func):
+    """
+    计算单个配置下的：(正确样本均值, 错误样本均值, 整体准确率)
+    """
+    step_texts = entry["step_texts"]
+    step_scores = entry["step_scores"]
+    # [FIX] 获取 step_token_len
+    step_token_len = entry["step_token_len"]  
+    Y = np.array(entry["Y"])
+    
+    # [FIX] 将 step_token_len 传递给 metric_func
+    # 1. 计算每个样本的指标值 (得到一个列表)
+    raw_values = np.array(metric_func(step_texts, step_scores, step_token_len))
+    
+    # 2. 区分正负
+    vals_corr = raw_values[Y == 1]
+    vals_wrong = raw_values[Y == 0]
+    
+    # 3. 计算均值 (如果某类样本数量为0，返回 NaN)
+    mean_corr = np.mean(vals_corr) if len(vals_corr) > 0 else np.nan
+    mean_wrong = np.mean(vals_wrong) if len(vals_wrong) > 0 else np.nan
+    acc = np.mean(Y)
+    
+    return mean_corr, mean_wrong, acc
+
+def plot_scatter_split(metric_name, save_suffix, metric_calc_func):
+    """
+    通用散点图函数：
+    - X轴: 指定指标的均值 (分 Correct 和 Wrong 两种点)
+    - Y轴: 模型的整体 Accuracy
+    - 图例: 包含颜色(正误)和形状(模型)
+    """
+    plt.figure(figsize=(12, 7)) # 稍微加宽一点给图例留空间
+    
+    seen_models = set()
+    
+    for model_name, model_data in model_results.items():
+        layers = detect_layers(model_data)
+        
+        # 获取该模型的绘图样式
+        marker = MODEL_MARKER_MAP.get(model_name, "o")
+        
+        for L in layers:
+            lambdas = detect_lambdas(model_data, L)
+            for lam in lambdas:
+                entry = model_data[L][lam]
+                
+                # 获取数据
+                x_corr, x_wrong, y_acc = get_metric_means_split(entry, metric_calc_func)
+                
+                if np.isnan(x_corr) or np.isnan(x_wrong):
+                    continue
+                
+                # 绘图 (不再在这里设置 label，防止图例重复或混乱)
+                # 1. 正确点 (Blue)
+                plt.scatter(x_corr, y_acc, 
+                            c='tab:blue', marker=marker, s=100, alpha=0.8, 
+                            edgecolors='k', linewidth=0.5)
+                
+                # 2. 错误点 (Red)
+                plt.scatter(x_wrong, y_acc, 
+                            c='tab:red', marker=marker, s=100, alpha=0.8, 
+                            edgecolors='k', linewidth=0.5)
+                
+                # 3. 连接线
+                plt.plot([x_corr, x_wrong], [y_acc, y_acc], 
+                         color='gray', linestyle=':', alpha=0.3, zorder=0)
+
+                seen_models.add(model_name)
+
+    plt.xlabel(f"Avg {metric_name} (Blue=Correct, Red=Wrong)")
+    plt.ylabel("Accuracy")
+    plt.title(f"{metric_name} vs Accuracy (Split by Correctness)")
+    plt.grid(alpha=0.3)
+    
+    # ==========================================
+    #  构建组合图例 (Composite Legend)
+    # ==========================================
+    legend_elements = []
+
+    # Part 1: 颜色图例 (Correct vs Wrong)
+    legend_elements.append(Line2D([0], [0], marker='o', color='w', label='--- TYPE ---', markerfacecolor='none', markeredgecolor='none')) 
+    legend_elements.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='tab:blue', label='Correct', markersize=10, markeredgecolor='k'))
+    legend_elements.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='tab:red', label='Wrong', markersize=10, markeredgecolor='k'))
+    
+    # Part 2: 模型图例 (Model Shapes)
+    # 添加一个空的不可见元素作为 "标题" 占位符
+    legend_elements.append(Line2D([0], [0], marker='o', color='w', label=' ', markerfacecolor='none', markeredgecolor='none'))
+    legend_elements.append(Line2D([0], [0], marker='o', color='w', label='--- MODELS ---', markerfacecolor='none', markeredgecolor='none'))
+    
+    # 对模型名称排序，保证图例顺序稳定
+    sorted_models = sorted(list(seen_models))
+    for m_name in sorted_models:
+        m_marker = MODEL_MARKER_MAP.get(m_name, 'o')
+        # 使用灰色 (gray) 展示形状，表示该形状通用于正误
+        legend_elements.append(
+            Line2D([0], [0], marker=m_marker, color='w', markerfacecolor='gray', 
+                   label=m_name, markersize=10, markeredgecolor='k', alpha=0.6)
+        )
+
+    # 放置图例
+    # bbox_to_anchor 将图例放在图外侧，避免遮挡数据点 (因为现在图例可能很长)
+    plt.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.01, 1), borderaxespad=0.)
+    
+    #调整布局以适应外置图例
+    plt.tight_layout()
+
+    out_path = f"{SAVE_ROOT}/special/scatter_split_{save_suffix}.png"
+    plt.savefig(out_path, dpi=300)
+    plt.close()
+    print(f"Saved: {out_path}")
+
+# ============================================================
+#  Metric Calculators (指标计算逻辑)
+# ============================================================
+
+def _calc_avg_step_score(texts, scores, token_lens):
+    # 平均每步得分 (不需要 token_lens，但保持接口一致)
+    return [np.mean(s) for s in scores]
+
+def _calc_first_step_score(texts, scores, token_lens):
+    # 第一步得分
+    return [s[0] if len(s) > 0 else 0 for s in scores]
+
+def _calc_avg_tokens_per_step(texts, scores, token_lens):
+    # [FIX] 现在使用真实的 step_token_len 计算
+    # token_lens 是 List[List[int]]
+    return [np.mean(lens) for lens in token_lens]
+
+def _calc_total_tokens(texts, scores, token_lens):
+    # [FIX] 现在使用真实的 step_token_len 计算总和
+    return [np.sum(lens) for lens in token_lens]
+
+def _calc_num_steps(texts, scores, token_lens):
+    # 步数 (深度)
+    return [len(s) for s in scores]
+
+def _calc_error_steps(texts, scores, token_lens):
+    # 错误步数 (低于阈值)
+    return [sum(1 for x in s if x < THRESHOLD) for s in scores]
+
+# ============================================================
+#  Main Execution Function
+# ============================================================
+
+def generate_all_scatter_plots():
+    """
+    一键生成所有分开正负样本的散点图
+    """
+    # 1. 平均分 vs Acc
+    plot_scatter_split("Avg Step Score", "score_avg", _calc_avg_step_score)
+    
+    # 2. 第一步分数 vs Acc
+    plot_scatter_split("First Step Score", "score_first", _calc_first_step_score)
+    
+    # 3. 平均每步 Tokens vs Acc
+    plot_scatter_split("Avg Tokens/Step", "tokens_step", _calc_avg_tokens_per_step)
+    
+    # 4. 总 Tokens (长度) vs Acc
+    plot_scatter_split("Total Tokens", "tokens_total", _calc_total_tokens)
+    
+    # 5. 总步数 (深度) vs Acc
+    plot_scatter_split("Num Steps", "num_steps", _calc_num_steps)
+
+    # 6. 错误步数 vs Acc
+    plot_scatter_split(f"Error Steps (<{THRESHOLD})", "error_steps", _calc_error_steps)
+
+plot_avg_tokens_vs_acc()
+plot_avg_total_tokens_vs_acc()
+plot_avg_steps_vs_acc()
+
+# # ============================================================
+# # Run All
+# # ============================================================
 
 # print("\n=== Generating Correct-vs-Wrong plots ===")
 # plot_correct_wrong()
@@ -957,19 +1358,18 @@ def plot_per_step_avg_correctness(max_steps=15):
 # print("\n=== Generating Scatter plots ===")
 # plot_scatter()
 
-# print("\n=== Generating Step-level correctness histograms ===")
-# plot_step_correctness_hist(max_steps=10, bins=25, density=True)
-
-# # （可选）把所有 steps 拉平做一个整体分布直方图
-# print("\n=== Generating Flattened step correctness histograms ===")
-# plot_step_correctness_hist_flatten(bins=30, density=True)
-
 # print("\n=== Generating Special plots ===")
 # plot_first_step_vs_lambda()
 # plot_avg_score_vs_acc()
 # plot_avg_tokens_vs_acc()
-print("\n=== Generating Per-step average correctness curves ===")
-plot_per_step_avg_correctness(max_steps=15)
+# plot_avg_total_tokens_vs_acc()
+# plot_avg_steps_vs_acc()
+# plot_avg_error_steps_vs_acc()
+# plot_score_vs_accumulated_tokens(max_tokens=2048, bins=20)
+# print("\n=== Generating Per-step average correctness curves ===")
+# plot_per_step_avg_correctness(max_steps=15)
 
+# generate_all_scatter_plots()
+# plot_step_correctness_hist_flatten()
 
-print("\n🎉 FINAL VERSION COMPLETE!  Saved in:", SAVE_ROOT)
+# print("\n🎉 FINAL VERSION COMPLETE!  Saved in:", SAVE_ROOT)

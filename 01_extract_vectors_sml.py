@@ -12,33 +12,40 @@ from utils import qwen_chat_prompt
 model_name_to_layer_index = {
     "Qwen/Qwen2.5-7B-Instruct": [14, 24, 28],
     "Qwen/Qwen2.5-1.5B-Instruct": [14, 24, 28],
+    "Qwen/Qwen2.5-0.5B-Instruct": [12, 20, 24],
     "Qwen/Qwen2.5-3B-Instruct": [18, 32, 36],
 }
-MAX_EXAMPLES = 10
+MAX_EXAMPLES = 50
 
 root_out_dir = Path(f"./vectors_Qwen14b_big_minus_small_selected_sample_{MAX_EXAMPLES}")
 root_out_dir.mkdir(exist_ok=True)
 
 GPT_5_MODEL_SAMPLES_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_gpt5_gsm8k_20260104_133223/gpt-5.1/samples_gsm8k_cot_zeroshot_2026-01-04T14-13-04.569148.jsonl"
-QWEN_14B_MODEL_SAMPLES_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_familiy/gsm8k_cot_zeroshot/Qwen2.5-14B-Instruct_L8_BASELINE/Qwen__Qwen2.5-14B-Instruct/samples_gsm8k_cot_zeroshot_2025-12-11T09-28-44.120949.jsonl"
+QWEN_14B_MODEL_SAMPLES_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_family/gsm8k_cot_zeroshot/Qwen2.5-14B-Instruct_L1_BASELINE/Qwen__Qwen2.5-14B-Instruct/samples_gsm8k_cot_zeroshot_2026-01-11T20-35-52.632309.jsonl"
 
 model_name_to_sample_paths = {
-    "Qwen/Qwen2.5-7B-Instruct": {
+    "Qwen/Qwen2.5-0.5B-Instruct": {
+        # "big": "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_familiy/gsm8k_cot_zeroshot/Qwen2.5-7B-Instruct_L8_BASELINE/Qwen__Qwen2.5-7B-Instruct/samples_gsm8k_cot_zeroshot_2025-12-01T01-41-34.372070.jsonl",
         "big": QWEN_14B_MODEL_SAMPLES_PATH,
         # "big": GPT_5_MODEL_SAMPLES_PATH,
-        "small": "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_familiy/gsm8k_cot_zeroshot/Qwen2.5-7B-Instruct_L8_BASELINE/Qwen__Qwen2.5-7B-Instruct/samples_gsm8k_cot_zeroshot_2025-12-01T01-41-34.372070.jsonl",
+        "small": "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_family/gsm8k_cot_zeroshot/Qwen2.5-0.5B-Instruct_L1_BASELINE/Qwen__Qwen2.5-0.5B-Instruct/samples_gsm8k_cot_zeroshot_2026-01-11T19-30-46.284994.jsonl",
     },
     "Qwen/Qwen2.5-1.5B-Instruct": {
         # "big": "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_familiy/gsm8k_cot_zeroshot/Qwen2.5-7B-Instruct_L8_BASELINE/Qwen__Qwen2.5-7B-Instruct/samples_gsm8k_cot_zeroshot_2025-12-01T01-41-34.372070.jsonl",
         "big": QWEN_14B_MODEL_SAMPLES_PATH,
         # "big": GPT_5_MODEL_SAMPLES_PATH,
-        "small": "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_familiy/gsm8k_cot_zeroshot/Qwen2.5-1.5B-Instruct_L8_BASELINE/Qwen__Qwen2.5-1.5B-Instruct/samples_gsm8k_cot_zeroshot_2025-12-11T02-46-20.289597.jsonl",
+        "small": "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_family/gsm8k_cot_zeroshot/Qwen2.5-1.5B-Instruct_L1_BASELINE/Qwen__Qwen2.5-1.5B-Instruct/samples_gsm8k_cot_zeroshot_2026-01-11T17-44-40.377584.jsonl",
     },
     "Qwen/Qwen2.5-3B-Instruct": {
         # "big": "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_familiy/gsm8k_cot_zeroshot/Qwen2.5-7B-Instruct_L8_BASELINE/Qwen__Qwen2.5-7B-Instruct/samples_gsm8k_cot_zeroshot_2025-12-01T01-41-34.372070.jsonl",
         "big": QWEN_14B_MODEL_SAMPLES_PATH,
         # "big": GPT_5_MODEL_SAMPLES_PATH,
-        "small": "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_familiy/gsm8k_cot_zeroshot/Qwen2.5-3B-Instruct_L8_BASELINE/Qwen__Qwen2.5-3B-Instruct/samples_gsm8k_cot_zeroshot_2025-12-11T03-35-22.111548.jsonl",
+        "small": "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_family/gsm8k_cot_zeroshot/Qwen2.5-3B-Instruct_L1_BASELINE/Qwen__Qwen2.5-3B-Instruct/samples_gsm8k_cot_zeroshot_2026-01-11T18-39-08.765074.jsonl",
+    },
+    "Qwen/Qwen2.5-7B-Instruct": {
+        "big": QWEN_14B_MODEL_SAMPLES_PATH,
+        # "big": GPT_5_MODEL_SAMPLES_PATH,
+        "small": "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_family/gsm8k_cot_zeroshot/Qwen2.5-7B-Instruct_L1_BASELINE/Qwen__Qwen2.5-7B-Instruct/samples_gsm8k_cot_zeroshot_2026-01-11T17-55-30.126533.jsonl",
     },
 }
 

@@ -175,8 +175,6 @@ def run_dataset(jsonl_path, gen_model_name, prm_model, prm_tokenizer, step_token
     STEP_SCORES_ALL = []
     STEP_TEXTS_ALL = []
     STEP_TOKEN_LEN = []
-    GENERATED_TEXT_ALL = []
-    SOLUTION_ALL = []
 
     print(f"🚀 Starting evaluation from index {eval_start}...")
 
@@ -224,8 +222,6 @@ def run_dataset(jsonl_path, gen_model_name, prm_model, prm_tokenizer, step_token
         # ---- record raw facts ----
         STEP_TEXTS_ALL.append(steps)
         STEP_SCORES_ALL.append(scores)
-        GENERATED_TEXT_ALL.append(cot)
-        SOLUTION_ALL.append(d.get("doc", {}).get("answer", ""))
 
         step_token_lens = [
             len(gen_tokenizer.encode(s, add_special_tokens=False))
@@ -245,18 +241,14 @@ def run_dataset(jsonl_path, gen_model_name, prm_model, prm_tokenizer, step_token
     assert all(len(x) == L for x in [
         STEP_SCORES_ALL,
         STEP_TEXTS_ALL,
-        STEP_TOKEN_LEN,
-        GENERATED_TEXT_ALL,
-        SOLUTION_ALL
+        STEP_TOKEN_LEN
     ]), "❌ Length mismatch detected!"
 
     return (
         Y,
         STEP_SCORES_ALL,
         STEP_TEXTS_ALL,
-        STEP_TOKEN_LEN,
-        GENERATED_TEXT_ALL,
-        SOLUTION_ALL
+        STEP_TOKEN_LEN
     )
 
 
@@ -264,7 +256,7 @@ def run_dataset(jsonl_path, gen_model_name, prm_model, prm_tokenizer, step_token
 # RUN PRM EVAL
 # ============================================================
 
-Y, STEP_SCORES_ALL, STEP_TEXTS_ALL, STEP_TOKEN_LEN, GENERATED_TEXT_ALL, SOLUTION_ALL = run_dataset(
+Y, STEP_SCORES_ALL, STEP_TEXTS_ALL, STEP_TOKEN_LEN = run_dataset(
     jsonl_path=args.jsonl,
     gen_model_name=args.gen_model,
     prm_model=prm_model,          
@@ -287,9 +279,7 @@ res = {
                 "system_prompt": SYSTEM_PROMPT, # Record prompt used
                 "Y": Y,
                 "step_scores": STEP_SCORES_ALL,
-                "steps_text": STEP_TEXTS_ALL,
-                "generated_text": GENERATED_TEXT_ALL,
-                "solution": SOLUTION_ALL,
+                "step_texts": STEP_TEXTS_ALL,
                 "step_token_len": STEP_TOKEN_LEN
             }
         }

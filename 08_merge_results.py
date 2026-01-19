@@ -4,7 +4,7 @@ import os
 
 FOLDERS = [
     # "./prm_out_qwen_family_3",
-    "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/prm_out_qwen_family_14btos",
+    "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_family_steered_calibrated_sweep/prm",
 ]
 
 final_results = {}

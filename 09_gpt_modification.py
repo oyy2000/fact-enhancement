@@ -44,8 +44,8 @@ from openai import OpenAI  # pip install openai
 # -----------------------------
 # Defaults (your paths)
 # -----------------------------
-IN_JSONL = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_familiy/gsm8k_cot_zeroshot/Qwen2.5-1.5B-Instruct_L8_BASELINE/Qwen__Qwen2.5-1.5B-Instruct/samples_gsm8k_cot_zeroshot_2025-12-11T02-46-20.289597.jsonl"
-OUT_JSONL = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_familiy/gsm8k_cot_zeroshot/Qwen2.5-1.5B-Instruct_L8_BASELINE/Qwen__Qwen2.5-1.5B-Instruct/samples_gsm8k_cot_zeroshot_rewritten.jsonl"
+IN_JSONL = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_family/gsm8k_cot_zeroshot/Qwen2.5-3B-Instruct_L1_BASELINE/Qwen__Qwen2.5-3B-Instruct/samples_gsm8k_cot_zeroshot_2026-01-11T18-39-08.765074.jsonl"
+OUT_JSONL = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_family/gsm8k_cot_zeroshot/Qwen2.5-3B-Instruct_L1_BASELINE/Qwen__Qwen2.5-3B-Instruct/samples_gsm8k_cot_zeroshot_rewritten_less_tokens_per_step.jsonl"
 
 
 def get_resps_0_0(obj: Dict[str, Any]) -> Tuple[Optional[str], bool]:
@@ -70,7 +70,28 @@ def set_resps_0_0(obj: Dict[str, Any], new_text: str) -> bool:
         return True
     return False
 
-def build_prompt(question: str, original_resp: str) -> str:
+def build_prompt_concise(question: str, original_resp: str) -> str:
+    return f"""You will rewrite the solution to be significantly more CONCISE, reducing the token count of each step while strictly preserving the logic and meaning.
+
+Hard constraints:
+- **Minimize tokens**: Rewrite sentences to be shorter and more direct. Remove filler words, redundant adjectives, and conversational fluff.
+- **Preserve Logic**: Keep the EXACT reasoning path, intermediate results, and final conclusion. Do NOT skip logical steps.
+- **Preserve Math**: Keep all numbers, equations, and operations exactly as they are in the original.
+- **No Style Changes**: Maintain the original tone (e.g., formal/informal), but make it denser and more efficient.
+- **Structure**: You may maintain the original number of steps, but make each step shorter. 
+- Preserve special markers like "<<a=b>>" if they appear.
+- Output plain text only. No bullet points or added commentary.
+
+Question:
+{question}
+
+Original solution (model output):
+{original_resp}
+
+Now output ONLY the rewritten, concise solution:
+"""
+
+def build_prompt_old(question: str, original_resp: str) -> str:
     return f"""You will lightly rewrite the solution by CONSERVATIVELY merging steps, while keeping the SAME style and meaning.
 
 Hard constraints:
@@ -98,7 +119,7 @@ def call_gpt_rewrite(
     client: OpenAI,
     model: str,
     prompt: str,
-    max_tokens: int = 220,
+    max_tokens: int = 8192,
     temperature: float = 0.0,
     retries: int = 4,
     sleep_base: float = 1.5,
@@ -125,9 +146,9 @@ def main():
     ap.add_argument("--out_jsonl", default=OUT_JSONL, help="Output JSONL file path")
     ap.add_argument("--out_json", default=None, help="Pretty JSON output path (default: out_jsonl->.json)")
     ap.add_argument("--model", default="gpt-5.1", help="OpenAI model name (Responses API)")
-    ap.add_argument("--rewrite_last_n", type=int, default=1, help="Rewrite only the last N examples")
+    ap.add_argument("--rewrite_last_n", type=int, default=2, help="Rewrite only the last N examples")
     ap.add_argument("--overwrite_resps", action="store_true", help="Overwrite obj['resps'][0][0] with rewritten text")
-    ap.add_argument("--max_output_tokens", type=int, default=512)
+    ap.add_argument("--max_output_tokens", type=int, default=8192)
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--sleep", type=float, default=0.0, help="Sleep seconds between API calls")
     args = ap.parse_args()
@@ -210,7 +231,7 @@ def main():
                 pbar.update(1)
                 continue
 
-            prompt = build_prompt(question, source_text)
+            prompt = build_prompt_old(question, source_text)
             rewritten = call_gpt_rewrite(
                 client=client,
                 model=args.model,

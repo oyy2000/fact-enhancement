@@ -11,16 +11,19 @@ from utils import qwen_chat_prompt
 
 model_name_to_layer_index = {
     # "Qwen/Qwen2.5-7B-Instruct": [14, 24, 28],
-    "Qwen/Qwen2.5-1.5B-Instruct": [14, 24, 28],
-    # "Qwen/Qwen2.5-3B-Instruct": [18, 32, 36],
+    # "Qwen/Qwen2.5-1.5B-Instruct": [14, 24, 28],
+    "Qwen/Qwen2.5-3B-Instruct": [18, 32, 36],
 }
 NUM_EXAMPLES = 50
 
-root_out_dir = Path(f"./vectors_less_steps_{NUM_EXAMPLES}")
+root_out_dir = Path(f"./vectors_less_tokens_{NUM_EXAMPLES}")
 root_out_dir.mkdir(exist_ok=True)
 QWEN_1_5B_MODEL_LESS_STEPS_SAMPLES_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_familiy/gsm8k_cot_zeroshot/Qwen2.5-1.5B-Instruct_L8_BASELINE/Qwen__Qwen2.5-1.5B-Instruct/samples_gsm8k_cot_zeroshot_rewritten.json"
+QWEN_3B_MODEL_LESS_TOKENS_SAMPLES_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_family/gsm8k_cot_zeroshot/Qwen2.5-3B-Instruct_L1_BASELINE/Qwen__Qwen2.5-3B-Instruct/samples_gsm8k_cot_zeroshot_rewritten_less_tokens_per_step.json"
+
 model_name_to_sample_paths = {
-    "Qwen/Qwen2.5-1.5B-Instruct": QWEN_1_5B_MODEL_LESS_STEPS_SAMPLES_PATH
+    # "Qwen/Qwen2.5-1.5B-Instruct": QWEN_1_5B_MODEL_LESS_STEPS_SAMPLES_PATH,
+    "Qwen/Qwen2.5-3B-Instruct": QWEN_3B_MODEL_LESS_TOKENS_SAMPLES_PATH
 }
 
 def get_exact_match(ex: dict):
