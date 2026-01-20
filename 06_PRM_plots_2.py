@@ -9,6 +9,21 @@ from torch.nn import CrossEntropyLoss
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import time
+
+# Import plotting functions from 05_plots_concise
+import sys
+# Assuming 05_plots_concise.py is in the same directory, import it
+# If it's not in the PYTHONPATH, we might need to add it, but it seems to be adjacent.
+try:
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("plots_concise", "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/05_plots_concise.py")
+    plots_concise = importlib.util.module_from_spec(spec)
+    sys.modules["plots_concise"] = plots_concise
+    spec.loader.exec_module(plots_concise)
+except ImportError:
+    # Fallback if standard import works
+    import plots_concise
 
 # ============================================================
 # 1. GLOBAL CONFIGURATION & PATHS
@@ -22,8 +37,8 @@ PRM_MODEL = "Qwen/Qwen2.5-Math-PRM-7B"
 
 # Set to TRUE to enable expensive model-based metrics (PPL, KL, Rank Shift)
 # This will try to load the model on GPU.
-ENABLE_PRM_SCORING = True
-ENABLE_MODEL_METRICS = False
+ENABLE_PRM_SCORING = False
+ENABLE_MODEL_METRICS = True
 ENABLE_PLOTTING = True
 
 os.makedirs(FOLDER, exist_ok=True)
@@ -50,11 +65,11 @@ def lam_to_str(lam: float) -> str:
 lam_values = [lam_to_str(lam) for lam in STEER_LAMBDAS]
 
 MODEL_MAP = {
-    "Qwen2.5-3B-Instruct": "Qwen/Qwen2.5-3B-Instruct",
+    "Qwen2.5-32B-Instruct": "Qwen/Qwen2.5-32B-Instruct",
 }
 
 MODEL_TO_LAYERS = {
-    "Qwen2.5-3B-Instruct": [1],
+    "Qwen2.5-32B-Instruct": [1],
 }
 
 # ============================================================
@@ -73,7 +88,7 @@ class ReasoningAnalyzer:
         return 1.0 - (len(unique_steps) / len(steps_text))
 
     @staticmethod
-    def detect_logical_leap(step_scores, threshold_drop=0.5):
+    def detect_logical_leap(step_scores, threshold_drop=0.7):
         """
         Detects 'Logical Leap': A high-confidence step followed immediately 
         by a very low-confidence step.
@@ -82,13 +97,13 @@ class ReasoningAnalyzer:
         for i in range(len(step_scores) - 1):
             curr = step_scores[i]
             next_s = step_scores[i+1]
-            # If we were confident (>0.8) and suddenly dropped (>0.5 drop)
-            if curr > 0.8 and (curr - next_s) > threshold_drop:
+            # If we were confident (>0.9) and suddenly dropped (>0.7 drop)
+            if curr > 0.9 and (curr - next_s) > threshold_drop:
                 leaps += 1
         return leaps
 
     @staticmethod
-    def detect_context_forgetfulness(step_scores, threshold=0.72):
+    def detect_context_forgetfulness(step_scores, threshold=0.9):
         """
         Detects 'Context Forgetfulness': A long chain of correct steps 
         that suddenly fails at the very end (late error).
@@ -113,16 +128,26 @@ class ReasoningAnalyzer:
             return cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
         except:
             return 0.0
+import torch
+from torch.nn import CrossEntropyLoss
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 class ModelEvaluator:
     """Handles expensive PPL / Rank Shift calculations requiring the model."""
-    def __init__(self, model_name, device="cuda"):
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16).to(device)
+    def __init__(self, base_model_name, device="cuda"):
+        # 注意：这里加载的必须是【微调前的 Base Model】
+        # 因为我们要看微调后的输出在 Base Model 眼中有多"意外"
+        self.tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            base_model_name, 
+            torch_dtype=torch.float16
+        ).to(device)
         self.device = device
         self.loss_fct = CrossEntropyLoss(reduction="none")
+        self.model.eval()
 
     def compute_ppl_and_rank(self, text):
+        """保留原本的 PPL 计算逻辑"""
         inputs = self.tokenizer(text, return_tensors="pt").to(self.device)
         with torch.no_grad():
             outputs = self.model(**inputs)
@@ -135,25 +160,89 @@ class ModelEvaluator:
             loss = self.loss_fct(shift_logits, shift_labels)
             ppl = torch.exp(loss.mean()).item()
             
-            # Rank (Simplistic Rank Shift Metric)
-            # Rank of the true token in the predicted distribution
+            # Rank (平均 Rank)
             probs = torch.softmax(logits, dim=-1)
-            # Get rank of the ground truth label
             sorted_idxs = torch.argsort(probs, dim=-1, descending=True)
             ranks = (sorted_idxs == labels.unsqueeze(-1)).nonzero(as_tuple=True)[-1] + 1
             avg_rank = ranks.float().mean().item()
             
         return ppl, avg_rank
 
+    def compute_rank_shift(self, prompt, full_response):
+        """
+        计算 Rank Shift：微调后生成的 Token 在 Base Model 中的排名。
+        返回所有 Token 的 Rank 列表，以便后续筛选 Top-k Shifted Tokens。
+        """
+        # 1. 分别 Tokenize 并拼接，确保边界清晰
+        # Prompt 通常会有 BOS token (如果是句子开头)
+        prompt_inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=True)
+        # Response 不加 BOS，因为它是接在 Prompt 后面的
+        response_inputs = self.tokenizer(full_response, return_tensors="pt", add_special_tokens=False)
+        
+        prompt_ids = prompt_inputs.input_ids.to(self.device)
+        response_ids = response_inputs.input_ids.to(self.device)
+        
+        # 拼接 Input IDs
+        input_ids = torch.cat([prompt_ids, response_ids], dim=1)
+        
+        # 确定 Response 开始的索引
+        start_idx = prompt_ids.shape[1]
+        
+        with torch.no_grad():
+            outputs = self.model(input_ids)
+            logits = outputs.logits
+            
+            # 2. 截取 Response 部分的 Logits 和 Labels
+            # Logits[i] 预测的是 input_ids[i+1]
+            # 我们要预测从 start_idx 开始的 Token (即 Response 的第一个词)
+            # 对应的 Logit 是 start_idx - 1
+            
+            # shift_logits: [1, response_len, vocab_size]
+            shift_logits = logits[:, start_idx-1 : -1, :]
+            # shift_labels: [1, response_len]
+            shift_labels = input_ids[:, start_idx:]
+            
+            # 3. 计算每个 Token 的 Rank
+            # 为了加速，我们可以只计算目标 Token 的 Rank，而不是全排序
+            # Rank = (有多少个词的分数 > 目标词的分数) + 1
+            
+            token_ranks = []
+            
+            # 遍历 Response 中的每个 Token
+            for i in range(shift_labels.shape[1]):
+                target_id = shift_labels[0, i].item()
+                current_logits = shift_logits[0, i]
+                
+                # 获取目标 Token 的 Logit 值
+                target_score = current_logits[target_id]
+                
+                # 计算 Rank: 比 target_score 大的 Logit 数量 + 1
+                rank = (current_logits > target_score).sum().item() + 1
+                
+                token_str = self.tokenizer.decode([target_id])
+                
+                token_ranks.append({
+                    "token": token_str,
+                    "rank": rank,
+                    "id": target_id
+                })
+                
+        return token_ranks
+
+    def find_most_shifted_tokens(self, token_ranks, top_k=5):
+        """
+        根据 Rank 大小筛选出 Shift 最大的 Token
+        """
+        # 按照 Rank 降序排列 (Rank 越大，说明 Base Model 越意想不到)
+        sorted_ranks = sorted(token_ranks, key=lambda x: x['rank'], reverse=True)
+        return sorted_ranks[:top_k]
+
+
 # ============================================================
 # 3. METRIC EXTRACTION
 # ============================================================
 
 THRESHOLD = 0.9
-MODEL_MARKERS = ["o", "s", "^", "D", "P", "X", "<", ">", "v"]
-WRONG_MARKERS = ["x", "X", "v", "p", "*", "d", "h", "H", "+"]
-MODEL_LINESTYLES = ["-", "--", "-.", ":"]
-LAYER_ALPHA = [1.0, 0.7, 0.5, 0.2]
 
 def lam_to_float(lam):
     if lam == "BASELINE": return 0.0
@@ -163,89 +252,8 @@ def detect_layers(model_data): return list(model_data.keys())
 def detect_lambdas(model_data, L): return list(model_data[L].keys())
 def _safe_name(s): return s.replace("/", "_").replace(" ", "_").replace(":", "_").replace("__", "_")
 
-def compute_prefix_first_error(step_scores, thr):
-    prefix_list, fe_list = [], []
-    for scores in step_scores:
-        prefix, fe = 0, None
-        for i, s in enumerate(scores):
-            if s >= thr: prefix += 1
-            else:
-                fe = i + 1; break
-        if fe is None: fe = len(scores) + 1
-        prefix_list.append(prefix); fe_list.append(fe)
-    return np.array(prefix_list), np.array(fe_list)
 
-def extract_metrics(entry, thr, model_name=None):
-    step_scores = entry["step_scores"]
-    step_token_len = entry["step_token_len"]
-    Y = np.array(entry["Y"])
-    
-    # Try to get text if available (Assuming entry has 'samples' or similar structure)
-    # This part depends on your JSONL structure. Assuming 'steps_text' exists.
-    # If not, some heuristics (like Repetition) will be 0.
-    steps_text_list = entry.get("steps_text", [[]]*len(Y)) 
-    full_text_list = entry.get("generated_text", [""]*len(Y))
-    gold_solution_list = entry.get("solution", [""]*len(Y))
 
-    prefix, first_err = compute_prefix_first_error(step_scores, thr)
-
-    avg_scores = np.array([np.mean(s) if len(s)>0 else 0 for s in step_scores])
-    avg_steps = np.array([len(s) for s in step_scores])
-    avg_total_tokens = np.array([np.sum(lens) if len(lens)>0 else 0 for lens in step_token_len])
-    
-    # --- NEW METRICS ---
-    
-    # 1. Repetition Loops
-    repetition_scores = np.array([ReasoningAnalyzer.detect_repetition(s) for s in steps_text_list])
-    
-    # 2. Logical Leaps
-    logical_leaps = np.array([ReasoningAnalyzer.detect_logical_leap(s) for s in step_scores])
-    
-    # 3. Context Forgetfulness (Late Error)
-    forgetfulness = np.array([ReasoningAnalyzer.detect_context_forgetfulness(s) for s in step_scores])
-
-    # 4. Text Similarity (if gold solution exists)
-    text_sim = []
-    if len(full_text_list) > 0 and len(gold_solution_list) > 0:
-        for gen, ref in zip(full_text_list, gold_solution_list):
-            text_sim.append(ReasoningAnalyzer.calculate_text_similarity(gen, ref))
-    text_sim = np.array(text_sim) if text_sim else np.zeros_like(Y, dtype=float)
-
-    # 5. Placeholders for Model-Based Metrics (PPL, Rank)
-    ppl_scores = np.array(entry.get("ppl", []))
-    if len(ppl_scores) == 0:
-        ppl_scores = np.zeros_like(Y, dtype=float)
-
-    rank_scores = np.array(entry.get("rank_shift", []))
-    if len(rank_scores) == 0:
-        rank_scores = np.zeros_like(Y, dtype=float)
-
-    return {
-        "prefix": prefix,
-        "first_error": first_err,
-        "avg_scores": avg_scores,
-        "avg_steps": avg_steps,
-        "avg_total_tokens": avg_total_tokens,
-        "repetition": repetition_scores,
-        "logical_leaps": logical_leaps,
-        "forgetfulness": forgetfulness,
-        "text_similarity": text_sim,
-        "ppl": ppl_scores,
-        "rank_shift": rank_scores,
-        "Y": Y
-    }
-
-def per_step_mean(step_scores, max_steps=None):
-    if len(step_scores) == 0: return np.array([]), np.array([])
-    lens = np.array([len(s) for s in step_scores], dtype=int)
-    K = int(min(max_steps, lens.max())) if max_steps else int(lens.max())
-    means = np.full(K, np.nan, dtype=float)
-    counts = np.zeros(K, dtype=int)
-    for k in range(K):
-        vals = [s[k] for s in step_scores if len(s) > k]
-        counts[k] = len(vals)
-        if counts[k] > 0: means[k] = float(np.mean(vals))
-    return means, counts
 
 # ============================================================
 # 4. WORKER FUNCTION
@@ -290,17 +298,49 @@ def worker(job_idx, job, gpu_id):
                 texts = entry.get("generated_text", [])
                 
                 if texts:
-                    evaluator = ModelEvaluator(gen_model_name, device=f"cuda:{gpu_id}")
+                    # Load original JSONL to retrieve Prompts
+                    try:
+                        with open(jsonl, 'r') as f_jsonl:
+                            raw_data = [json.loads(line) for line in f_jsonl]
+                    except Exception as e:
+                        print(f"[GPU{gpu_id}] Failed to read jsonl {jsonl}: {e}")
+                        raw_data = []
+
+                    evaluator = ModelEvaluator(gen_model_name, device=f"cuda:0")
                     ppl_list = []
                     rank_list = []
+                    token_ranks_list = []
                     
+                    data_idx = 0
+
                     for text in texts:
-                        ppl, rank = evaluator.compute_ppl_and_rank(text)
-                        ppl_list.append(ppl)
-                        rank_list.append(rank)
+                        # ppl, rank = evaluator.compute_ppl_and_rank(text)
+                        # ppl_list.append(ppl)
+                        # rank_list.append(rank)
                         
-                    entry["ppl"] = ppl_list
-                    entry["rank_shift"] = rank_list
+                        # Find corresponding prompt
+                        prompt = ""
+                        for j in range(data_idx, len(raw_data)):
+                            d = raw_data[j]
+                            if d.get("filter") == "strict-match": continue
+                            try:
+                                cot_cand = d["resps"][0][0].strip()
+                            except: continue
+
+                            if cot_cand == text:
+                                prompt = d.get("arguments", {}).get("gen_args_0", {}).get("arg_0", "")
+                                data_idx = j + 1
+                                break
+                        
+                        if prompt:
+                            tr = evaluator.compute_rank_shift(prompt, text)
+                            token_ranks_list.append(tr)
+                        else:
+                            token_ranks_list.append([])
+                        
+                    # entry["ppl"] = ppl_list
+                    # entry["rank_shift"] = rank_list
+                    entry["token_rank_shifts"] = token_ranks_list
                     
                     # Save back to file
                     with open(out_file, 'w') as f:
@@ -313,128 +353,30 @@ def worker(job_idx, job, gpu_id):
             print(f"Failed model metrics: {e}")
 
 # ============================================================
-# 5. PLOTTING FUNCTIONS
+# 5. PLOTTING DELEGATION
 # ============================================================
 
 def run_all_plots(model_results):
-    all_models = list(model_results.keys())
-    print(f"Generating plots for models: {all_models}")
+    print(">>> Delegating to 05_plots_concise.py for plotting...")
+    
+    # We must call setup_plotting to initialize globals in 05_plots_concise
+    plots_concise.setup_plotting(model_results, SAVE_ROOT)
+    
+    print("\n=== Generating Correct-vs-Wrong plots ===")
+    plots_concise.plot_correct_wrong()
 
-    color_list = plt.cm.tab20(np.linspace(0, 1, len(all_models)))
-    MODEL_COLOR_MAP = {model: color_list[i] for i, model in enumerate(all_models)}
-    MODEL_MARKER_MAP = {model: MODEL_MARKERS[i % len(MODEL_MARKERS)] for i, model in enumerate(all_models)}
-    MODEL_LINESTYLE_MAP = {model: MODEL_LINESTYLES[i % len(MODEL_LINESTYLES)] for i, model in enumerate(all_models)}
+    print("\n=== Generating All-sample plots ===")
+    plots_concise.plot_all()
 
-    # --- Plot A: Generic Line Plotter ---
-    def generic_plot(metric_key, title, ylabel, subdir):
-        plt.figure(figsize=(10,6))
-        for model_name, model_data in model_results.items():
-            layers = detect_layers(model_data)
-            alpha_map = {L: LAYER_ALPHA[i % len(LAYER_ALPHA)] for i, L in enumerate(layers)}
+    plots_concise.plot_avg_score_vs_acc()
+    plots_concise.plot_avg_tokens_vs_acc()
+    plots_concise.plot_avg_total_tokens_vs_acc()
+    plots_concise.plot_avg_steps_vs_acc()
+    plots_concise.plot_avg_error_steps_vs_acc()
 
-            for L in layers:
-                lambdas = detect_lambdas(model_data, L)
-                lam_vals, mean_vals = [], []
-
-                for lam in lambdas:
-                    entry = model_data[L][lam]
-                    M = extract_metrics(entry, THRESHOLD, model_name)
-                    lam_vals.append(lam_to_float(lam))
-                    mean_vals.append(np.mean(M[metric_key]))
-
-                idx = np.argsort(lam_vals)
-                plt.plot(np.array(lam_vals)[idx], np.array(mean_vals)[idx],
-                            color=MODEL_COLOR_MAP[model_name], linestyle=MODEL_LINESTYLE_MAP[model_name],
-                            marker=MODEL_MARKER_MAP[model_name], markersize=6, alpha=alpha_map[L],
-                            label=f"{model_name}-{L}")
-
-        plt.title(title)
-        plt.xlabel("Steering vector multiplier (λ)")
-        plt.ylabel(ylabel)
-        plt.grid(alpha=0.3)
-        plt.legend(bbox_to_anchor=(1.05,1), loc="upper left")
-        plt.tight_layout()
-        plt.savefig(f"{SAVE_ROOT}/{subdir}/{metric_key}.png", dpi=300)
-        plt.close()
-
-    # --- Plot Group 1: Standard Metrics ---
-    metrics_std = {
-        "prefix": ("Avg Prefix Length", "Steps"),
-        "first_error": ("Avg First Error Step", "Step Index"),
-        "avg_scores": ("Avg Step Correctness", "PRM Score"),
-        "avg_total_tokens": ("Avg Total Tokens", "Count")
-    }
-    for k, (tit, ylab) in metrics_std.items():
-        generic_plot(k, tit, ylab, "all")
-
-    # --- Plot Group 2: Reasoning Errors & Text Stats ---
-    print(">>> generating reasoning error plots...")
-    metrics_adv = {
-        "repetition": ("Repetition Ratio (Looping)", "Repetition Score (0-1)"),
-        "logical_leaps": ("Avg Logical Leaps per Sample", "Count"),
-        "forgetfulness": ("Context Forgetfulness Rate", "Rate"),
-        "text_similarity": ("Text Similarity to Gold", "Cosine Sim")
-    }
-    for k, (tit, ylab) in metrics_adv.items():
-        generic_plot(k, tit, ylab, "reasoning_errors")
-
-    # --- Plot Group 3: Scatters ---
-    def plot_scatter(x_metric_fn, x_label, filename):
-        plt.figure(figsize=(10,6))
-        seen_models = set()
-        for model_name, model_data in model_results.items():
-            layers = detect_layers(model_data)
-            for L in layers:
-                for lam, entry in model_data[L].items():
-                    M = extract_metrics(entry, THRESHOLD)
-                    val = np.mean(M[x_label]) if isinstance(x_label, str) else x_metric_fn(M)
-                    acc = np.mean(M["Y"])
-                    label = model_name if model_name not in seen_models else None
-                    seen_models.add(model_name)
-                    plt.scatter(val, acc, color=MODEL_COLOR_MAP[model_name], 
-                                marker=MODEL_MARKER_MAP[model_name], s=140, alpha=0.85, label=label)
-        
-        plt.xlabel(x_label if isinstance(x_label, str) else "Metric")
-        plt.ylabel("Accuracy")
-        plt.grid(alpha=0.3)
-        plt.legend()
-        plt.savefig(f"{SAVE_ROOT}/scatter/{filename}.png", dpi=300)
-        plt.close()
-
-    print(">>> generating scatter plots...")
-    plot_scatter("repetition", "Repetition Score", "repetition_vs_accuracy")
-    plot_scatter("text_similarity", "Text Similarity", "similarity_vs_accuracy")
-    plot_scatter("avg_scores", "Avg PRM Score", "prm_score_vs_accuracy")
-
-    # --- Plot Group 4: Per Step Avg ---
-    print(">>> generating per-step traces...")
-    outdir = f"{SAVE_ROOT}/per_step_avg"
-    for model_name, model_data in model_results.items():
-        layers = detect_layers(model_data)
-        for L in layers:
-            lambdas = detect_lambdas(model_data, L)
-            for lam in lambdas:
-                entry = model_data[L][lam]
-                step_scores_all = entry["step_scores"]
-                Y = np.array(entry["Y"])
-                
-                mean_all, _ = per_step_mean(step_scores_all, 15)
-                mean_corr, _ = per_step_mean([s for i,s in enumerate(step_scores_all) if Y[i]==1], 15)
-                mean_wrong, _ = per_step_mean([s for i,s in enumerate(step_scores_all) if Y[i]==0], 15)
-
-                if len(mean_all) == 0: continue
-                plt.figure(figsize=(9, 5))
-                plt.plot(np.arange(1, len(mean_all)+1), mean_all, marker="o", label="All")
-                if len(mean_corr)>0: plt.plot(np.arange(1, len(mean_corr)+1), mean_corr, marker="s", label="Correct")
-                if len(mean_wrong)>0: plt.plot(np.arange(1, len(mean_wrong)+1), mean_wrong, marker="x", label="Wrong")
-                
-                plt.axhline(THRESHOLD, linestyle="--", color='black', alpha=0.5)
-                plt.title(f"Step-wise Correctness Rate\n{model_name} {L} {lam}")
-                plt.ylabel("Avg PRM Score")
-                plt.xlabel("Step")
-                plt.legend()
-                plt.savefig(f"{outdir}/{_safe_name(model_name)}_L{L}_{_safe_name(lam)}.png", dpi=300)
-                plt.close()
+    # plots_concise.plot_per_step_avg_correctness(max_steps=15)
+    
+    print(">>> Plotted via 05_plots_concise.py")
 
 # ============================================================
 # 6. MAIN EXECUTION
@@ -480,28 +422,28 @@ if __name__ == "__main__":
         pool.join()
         print("✔ All GPU jobs finished.")
 
-    # Merge Results
-    final = {}
-    chunk_files = sorted(glob.glob(f"{FOLDER}/results_chunk_*.json"))
-    if chunk_files:
-        print(f"Merging {len(chunk_files)} chunk files...")
-        for f in chunk_files:
-            try:
-                part = json.load(open(f))
-                for model in part:
-                    final.setdefault(model, {})
-                    for L in part[model]:
-                        final[model].setdefault(L, {})
-                        for lam in part[model][L]:
-                            final[model][L][lam] = part[model][L][lam]
-            except Exception as e: print(f"Error {f}: {e}")
-        
-        merged_path = f"{FOLDER}/results_merged.json"
-        with open(merged_path, "w") as f: json.dump(final, f, indent=2)
-    else:
-        merged_path = f"{FOLDER}/results_merged.json"
-        if not os.path.exists(merged_path):
-             print("❌ No results found. Exiting."); exit()
+        # Merge Results
+        final = {}
+        chunk_files = sorted(glob.glob(f"{FOLDER}/results_chunk_*.json"))
+        if chunk_files:
+            print(f"Merging {len(chunk_files)} chunk files...")
+            for f in chunk_files:
+                try:
+                    part = json.load(open(f))
+                    for model in part:
+                        final.setdefault(model, {})
+                        for L in part[model]:
+                            final[model].setdefault(L, {})
+                            for lam in part[model][L]:
+                                final[model][L][lam] = part[model][L][lam]
+                except Exception as e: print(f"Error {f}: {e}")
+            
+            merged_path = f"{FOLDER}/results_merged.json"
+            with open(merged_path, "w") as f: json.dump(final, f, indent=2)
+
+    merged_path = f"{FOLDER}/results_merged.json"
+    if not os.path.exists(merged_path):
+        print("❌ No results found. Exiting."); exit()
 
     print("\n>>> STARTING PLOTTING")
     if ENABLE_PLOTTING:

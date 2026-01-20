@@ -18,12 +18,12 @@ def get_lambda_marker_map(lambdas):
     lambdas = sorted(lambdas, key=lam_to_float)
     return {lam: LAM_MARKERS[i % len(LAM_MARKERS)] for i, lam in enumerate(lambdas)}
 
-THRESHOLD = 0.72
+THRESHOLD = 0.9
 def get_layer_color_map(layers):
     colors = plt.cm.tab10(np.linspace(0, 1, len(layers)))
     return {L: colors[i] for i, L in enumerate(layers)}
 
-SAVE_DIR = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_family_lib_large_lambda/prm"
+SAVE_DIR = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_less_tokens_3B_lib_manual_same_lib_1000samples/prm_results"
 MODEL_FILES = [
     f"{SAVE_DIR}/results_merged.json",
     # 你可以继续添加其它模型族
@@ -123,6 +123,15 @@ def extract_metrics(entry, thr, model_name=None):
         np.sum(np.array(s) < thr) / max(len(s), 1) for s in step_scores
     ])
 
+    # ===== PPL / Rank Shift (Optional) =====
+    ppl = np.array(entry.get("ppl", []))
+    if len(ppl) == 0:
+        ppl = np.full(len(Y), np.nan)
+        
+    rank_shift = np.array(entry.get("rank_shift", []))
+    if len(rank_shift) == 0:
+        rank_shift = np.full(len(Y), np.nan)
+
     return {
         "prefix": prefix,
         "first_error": first_err,
@@ -133,6 +142,8 @@ def extract_metrics(entry, thr, model_name=None):
         "avg_tokens_per_step": avg_tokens_per_step,
         "avg_total_tokens": avg_total_tokens,
         "F_hard": F_hard,
+        "ppl": ppl,
+        "rank_shift": rank_shift,
         "Y": Y
     }
 
@@ -141,45 +152,66 @@ def extract_metrics(entry, thr, model_name=None):
 # Load All Models (each JSON may contain multiple models)
 # ============================================================
 
-print("Loading all models...")
-model_results = {}
+def setup_plotting(data, save_dir):
+    global model_results, all_models, MODEL_COLOR_MAP, MODEL_MARKER_MAP, MODEL_LINESTYLE_MAP, SAVE_ROOT
+    model_results = data
+    SAVE_ROOT = save_dir
+    
+    # Ensure output directories exist
+    os.makedirs(SAVE_ROOT, exist_ok=True)
+    os.makedirs(f"{SAVE_ROOT}/correct_wrong", exist_ok=True)
+    os.makedirs(f"{SAVE_ROOT}/all", exist_ok=True)
+    os.makedirs(f"{SAVE_ROOT}/scatter", exist_ok=True)
+    os.makedirs(f"{SAVE_ROOT}/special", exist_ok=True)
+    os.makedirs(f"{SAVE_ROOT}/per_step_avg", exist_ok=True)
 
-for file in MODEL_FILES:
-    raw = json.load(open(file))
-    for model_name, model_data in raw.items():
-        print(model_name)
-        model_results[model_name] = model_data
-        print("Loaded model:", model_name)
+    all_models = list(model_results.keys())
+    print("\nTotal models:", len(all_models))
 
-all_models = list(model_results.keys())
-print("\nTotal models:", len(all_models))
+    # Assign Color, Marker, Linestyle Per Model
+    color_list = plt.cm.tab20(np.linspace(0, 1, len(all_models)))
+    MODEL_COLOR_MAP = {
+        model_name: color_list[i]
+        for i, model_name in enumerate(all_models)
+    }
 
+    MODEL_MARKER_MAP = {
+        model_name: MODEL_MARKERS[i % len(MODEL_MARKERS)]
+        for i, model_name in enumerate(all_models)
+    }
 
-# ============================================================
-# Assign Color, Marker, Linestyle Per Model
-# ============================================================
+    MODEL_LINESTYLE_MAP = {
+        model_name: MODEL_LINESTYLES[i % len(MODEL_LINESTYLES)]
+        for i, model_name in enumerate(all_models)
+    }
 
-color_list = plt.cm.tab20(np.linspace(0, 1, len(all_models)))
-MODEL_COLOR_MAP = {
-    model_name: color_list[i]
-    for i, model_name in enumerate(all_models)
-}
+def main():
+    print("Loading all models...")
+    data = {}
+    for file in MODEL_FILES:
+        raw = json.load(open(file))
+        for model_name, model_data in raw.items():
+            print(model_name)
+            data[model_name] = model_data
+            print("Loaded model:", model_name)
+    
+    setup_plotting(data, SAVE_DIR)
 
-MODEL_MARKER_MAP = {
-    model_name: MODEL_MARKERS[i % len(MODEL_MARKERS)]
-    for i, model_name in enumerate(all_models)
-}
+    print("\n=== Generating Correct-vs-Wrong plots ===")
+    plot_correct_wrong()
 
-MODEL_LINESTYLE_MAP = {
-    model_name: MODEL_LINESTYLES[i % len(MODEL_LINESTYLES)]
-    for i, model_name in enumerate(all_models)
-}
+    print("\n=== Generating All-sample plots ===")
+    plot_all()
 
+    plot_avg_score_vs_acc()
+    plot_avg_tokens_vs_acc()
+    plot_avg_total_tokens_vs_acc()
 
-# ============================================================
-#  A. Correct vs Wrong Plots
-# ============================================================
-def plot_correct_wrong():
+    plot_per_step_avg_correctness(max_steps=15)
+
+if __name__ == "__main__":
+    main()
+
     metrics = {
         "prefix": "Avg Prefix Length",
         "first_error": "Avg First Error Step",
@@ -188,7 +220,9 @@ def plot_correct_wrong():
         "avg_tokens_per_step": "Avg Tokens per Step",
         "avg_total_tokens": "Avg Total Tokens",
         "total_error_steps": "Total Error Steps",
-        "error_step_ratio": "Error Step Ratio"
+        "error_step_ratio": "Error Step Ratio",
+        "ppl": "Perplexity",
+        "rank_shift": "Rank Shift"
     }
 
     WRONG_MARKERS = ["x", "X", "v", "p", "*", "d", "h", "H", "+"]
@@ -286,7 +320,9 @@ def plot_all():
         "avg_total_tokens": "Avg Total Tokens",
         "acc": "Accuracy",   # ⭐ 新增
         "total_error_steps": "Total Error Steps",
-        "error_step_ratio": "Error Step Ratio"
+        "error_step_ratio": "Error Step Ratio",
+        "ppl": "Perplexity",
+        "rank_shift": "Rank Shift"
     }
 
     outdir = f"{SAVE_ROOT}/all"
@@ -367,6 +403,105 @@ def plot_all():
 
 def lam_to_size(lam, base=80, scale=40):
     return base + scale * abs(lam)
+
+
+# ============================================================
+#  A. Correct vs Wrong Plots
+# ============================================================
+def plot_correct_wrong():
+    metrics = {
+        "prefix": "Avg Prefix Length",
+        "first_error": "Avg First Error Step",
+        "avg_scores": "Avg Step Correctness",
+        "avg_steps": "Avg Total Steps",
+        "avg_tokens_per_step": "Avg Tokens per Step",
+        "avg_total_tokens": "Avg Total Tokens",
+        "total_error_steps": "Total Error Steps",
+        "error_step_ratio": "Error Step Ratio",
+        "ppl": "Perplexity",
+        "rank_shift": "Rank Shift"
+    }
+
+    WRONG_MARKERS = ["x", "X", "v", "p", "*", "d", "h", "H", "+"]
+
+    outdir = f"{SAVE_ROOT}/correct_wrong"
+
+    for metric_key, metric_name in metrics.items():
+        plt.figure(figsize=(10,6))
+
+        # enumerate 确保模型有 index i（用于 wrong marker）
+        for i, (model_name, model_data) in enumerate(model_results.items()):
+            
+            # Wrong marker 由模型 index i 决定
+            wrong_marker = WRONG_MARKERS[i % len(WRONG_MARKERS)]
+
+            layers = detect_layers(model_data)
+            alpha_map = {L: LAYER_ALPHA[j % len(LAYER_ALPHA)] for j, L in enumerate(layers)}
+
+            for L in layers:
+                lambdas = detect_lambdas(model_data, L)
+
+                lam_vals = []
+                corr_vals = []
+                wrong_vals = []
+
+                for lam in lambdas:
+                    entry = model_data[L][lam]
+                    M = extract_metrics(entry, THRESHOLD, model_name)
+                    Y = M["Y"]
+
+                    correct_mean = np.mean(M[metric_key][Y == 1])
+                    wrong_mean   = np.mean(M[metric_key][Y == 0])
+
+                    lam_num = lam_to_float(lam)
+
+                    lam_vals.append(lam_num)
+                    corr_vals.append(correct_mean)
+                    wrong_vals.append(wrong_mean)
+
+                # sorting by lambda
+                idx = np.argsort(lam_vals)
+                lam_vals = np.array(lam_vals)[idx]
+                corr_vals = np.array(corr_vals)[idx]
+                wrong_vals = np.array(wrong_vals)[idx]
+
+                # Correct curve
+                plt.plot(
+                    lam_vals, corr_vals,
+                    color=MODEL_COLOR_MAP[model_name],
+                    linestyle=MODEL_LINESTYLE_MAP[model_name],
+                    marker=MODEL_MARKER_MAP[model_name],     # correct marker (模型)
+                    markersize=7,
+                    alpha=alpha_map[L],
+                    label=f"{model_name}-{L} (Correct)"
+                )
+
+                # Wrong curve
+                plt.plot(
+                    lam_vals, wrong_vals,
+                    color=MODEL_COLOR_MAP[model_name],
+                    linestyle=MODEL_LINESTYLE_MAP[model_name],
+                    marker=wrong_marker,                     # wrong marker (不同样式)
+                    markersize=8,
+                    alpha=alpha_map[L],
+                    label=f"{model_name}-{L} (Wrong)"
+                )
+
+        plt.title(f"Correct vs Wrong — {metric_name}")
+        plt.xlabel("λ")
+        plt.ylabel(metric_name)
+        plt.grid(alpha=0.3)
+
+        # dedupe legend
+        handles, labels = plt.gca().get_legend_handles_labels()
+        uniq = dict(zip(labels, handles))
+        plt.legend(uniq.values(), uniq.keys(), bbox_to_anchor=(1.05,1), loc="upper left")
+
+        plt.tight_layout()
+        out_path = f"{outdir}/{metric_key}.png"
+        plt.savefig(out_path, dpi=300)
+        plt.close()
+        print("Saved:", out_path)
 
 
 
@@ -694,21 +829,4 @@ def plot_avg_error_steps_vs_acc():
     plt.savefig(out_path, dpi=300)
     plt.close()
     print("Saved:", out_path)
-
-
-
-# # ============================================================
-# # Run All
-# # ============================================================
-
-print("\n=== Generating Correct-vs-Wrong plots ===")
-plot_correct_wrong()
-
-print("\n=== Generating All-sample plots ===")
-plot_all()
-
-plot_avg_score_vs_acc()
-plot_avg_tokens_vs_acc()
-plot_avg_total_tokens_vs_acc()
-
-plot_per_step_avg_correctness(max_steps=15) 
+ 
