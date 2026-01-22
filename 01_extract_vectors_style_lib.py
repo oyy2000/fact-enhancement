@@ -1,11 +1,9 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import json
-import numpy as np
 from pathlib import Path
-from tqdm import tqdm
 from utils import qwen_chat_prompt
-
+import os
 # ==========================================
 # ===== 引入 steering_vectors 库 ===========
 # ==========================================
@@ -16,19 +14,19 @@ from steering_vectors import train_steering_vector, SteeringVector
 # =====================
 
 model_name_to_layer_index = {
-    "Qwen/Qwen2.5-3B-Instruct": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35],
+    "Qwen/Qwen2.5-3B-Instruct": [i for i in range(36)], # Simply all layers
 }
 NUM_EXAMPLES = 50
-
-# 输出目录_
-root_out_dir = Path(f"./vectors_less_tokens_compare{NUM_EXAMPLES}_lib")
-root_out_dir.mkdir(exist_ok=True)
-
-QWEN_3B_MODEL_LESS_TOKENS_SAMPLES_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_qwen_family/gsm8k_cot_zeroshot/Qwen2.5-3B-Instruct_L1_BASELINE/Qwen__Qwen2.5-3B-Instruct/samples_gsm8k_cot_zeroshot_rewritten_less_tokens_per_step.json"
+DIR_PATH = "./gpt_rewrites_unified"
+PROMPT_STYLE = "old"  # 核心变量：修改这里即可切换不同实验
+REWRITEEN_SAMPLE_PATH = os.path.join(DIR_PATH, f"Qwen/Qwen2.5-3B-Instruct".replace("/", "_"))
 
 model_name_to_sample_paths = {
-    "Qwen/Qwen2.5-3B-Instruct": QWEN_3B_MODEL_LESS_TOKENS_SAMPLES_PATH
+    "Qwen/Qwen2.5-3B-Instruct": os.path.join(REWRITEEN_SAMPLE_PATH, f"rewritten_{PROMPT_STYLE}.json")
 }
+
+root_out_dir = Path(REWRITEEN_SAMPLE_PATH) / f"vectors_{NUM_EXAMPLES}_{PROMPT_STYLE}"
+root_out_dir.mkdir(exist_ok=True)
 
 # =====================
 # ===== HELPERS =======
@@ -65,6 +63,7 @@ for model_name, layer_list in model_name_to_layer_index.items():
     print(f"\n========== Processing model: {model_name} ==========")
 
     model_tag = model_name.replace("/", "_")
+    model_tag += "_applied"
     model_out_dir = root_out_dir / model_tag
     model_out_dir.mkdir(exist_ok=True)
 
@@ -75,7 +74,7 @@ for model_name, layer_list in model_name_to_layer_index.items():
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch.bfloat16,
+        torch_dtype=torch.float16,      
         device_map="auto",
     ).eval()
 

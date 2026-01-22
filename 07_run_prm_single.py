@@ -132,7 +132,7 @@ def eval_cot_prm(query, steps, model, tokenizer, step_token_id):
     return scores_list[0] if scores_list else []
 
 
-def split_steps_for_qwen(cot_text):
+def split_steps_for_qwen(cot_text, strategy="auto"):
     """
     针对 Qwen 2.5 Math 的切分策略。
     优先尝试 \n\n，如果只有单行，则尝试 \n，
@@ -143,13 +143,31 @@ def split_steps_for_qwen(cot_text):
         
     cot_text = cot_text.strip()
     
-    # 策略 1: 官方推荐的双换行 (Double Newline) - 常见于 Instruct 模型
-    if "\n\n" in cot_text:
-        return [s.strip() for s in cot_text.split("\n\n") if s.strip()]
+    separator = None
     
-    # 策略 2: 单换行 (Single Newline) - 常见于简单格式
-    if "\n" in cot_text:
-        return [s.strip() for s in cot_text.split("\n") if s.strip()]
+    if strategy == "double_newline":
+        separator = "\n\n"
+    elif strategy == "single_newline":
+        separator = "\n"
+    elif strategy == "auto":
+        # 策略 1: 官方推荐的双换行 (Double Newline) - 常见于 Instruct 模型
+        if "\n\n" in cot_text:
+            separator = "\n\n"
+        # 策略 2: 单换行 (Single Newline) - 常见于简单格式
+        elif "\n" in cot_text:
+            separator = "\n"
+    
+    if separator:
+        parts = cot_text.split(separator)
+        steps = []
+        for i, p in enumerate(parts):
+            if not p.strip(): continue
+            # 保留分隔符，以便于 token 计算
+            if i < len(parts) - 1:
+                steps.append(p.strip() + separator)
+            else:
+                steps.append(p.strip())
+        return steps
         
     # 策略 3 (兜底): 如果完全没有换行，尝试按句号切分 (需小心 LaTeX)
     # 这是一个简单的 Regex，避开了数字中的点 (如 3.14)
@@ -177,6 +195,15 @@ def run_dataset(jsonl_path, gen_model_name, prm_model, prm_tokenizer, step_token
     STEP_TOKEN_LEN = []
     GENERATED_TEXT_ALL = []
     SOLUTION_ALL = []
+
+    # Extra stats for both strategies
+    STEP_TEXTS_DOUBLE = []
+    STEP_TOKEN_LEN_DOUBLE = []
+    STEP_NUMS_DOUBLE = []
+
+    STEP_TEXTS_SINGLE = []
+    STEP_TOKEN_LEN_SINGLE = []
+    STEP_NUMS_SINGLE = []
 
     print(f"🚀 Starting evaluation from index {eval_start}...")
 
@@ -233,6 +260,19 @@ def run_dataset(jsonl_path, gen_model_name, prm_model, prm_tokenizer, step_token
         ]
         STEP_TOKEN_LEN.append(step_token_lens)
 
+        # ---- Calculate Extra Stats for Both Strategies ----
+        # 1. Double Newline
+        sd = split_steps_for_qwen(cot, strategy="double_newline")
+        STEP_TEXTS_DOUBLE.append(sd)
+        STEP_TOKEN_LEN_DOUBLE.append([len(gen_tokenizer.encode(s, add_special_tokens=False)) for s in sd])
+        STEP_NUMS_DOUBLE.append(len(sd))
+
+        # 2. Single Newline
+        ss = split_steps_for_qwen(cot, strategy="single_newline")
+        STEP_TEXTS_SINGLE.append(ss)
+        STEP_TOKEN_LEN_SINGLE.append([len(gen_tokenizer.encode(s, add_special_tokens=False)) for s in ss])
+        STEP_NUMS_SINGLE.append(len(ss))
+
         Y.append(int(d.get(label, 0)))
         
         if idx % 10 == 0:
@@ -247,7 +287,9 @@ def run_dataset(jsonl_path, gen_model_name, prm_model, prm_tokenizer, step_token
         STEP_TEXTS_ALL,
         STEP_TOKEN_LEN,
         GENERATED_TEXT_ALL,
-        SOLUTION_ALL
+        SOLUTION_ALL,
+        STEP_TEXTS_DOUBLE,
+        STEP_TEXTS_SINGLE
     ]), "❌ Length mismatch detected!"
 
     return (
@@ -256,7 +298,13 @@ def run_dataset(jsonl_path, gen_model_name, prm_model, prm_tokenizer, step_token
         STEP_TEXTS_ALL,
         STEP_TOKEN_LEN,
         GENERATED_TEXT_ALL,
-        SOLUTION_ALL
+        SOLUTION_ALL,
+        STEP_TEXTS_DOUBLE,
+        STEP_TOKEN_LEN_DOUBLE,
+        STEP_NUMS_DOUBLE,
+        STEP_TEXTS_SINGLE,
+        STEP_TOKEN_LEN_SINGLE,
+        STEP_NUMS_SINGLE
     )
 
 
@@ -264,7 +312,9 @@ def run_dataset(jsonl_path, gen_model_name, prm_model, prm_tokenizer, step_token
 # RUN PRM EVAL
 # ============================================================
 
-Y, STEP_SCORES_ALL, STEP_TEXTS_ALL, STEP_TOKEN_LEN, GENERATED_TEXT_ALL, SOLUTION_ALL = run_dataset(
+Y, STEP_SCORES_ALL, STEP_TEXTS_ALL, STEP_TOKEN_LEN, GENERATED_TEXT_ALL, SOLUTION_ALL, \
+STEP_TEXTS_DOUBLE, STEP_TOKEN_LEN_DOUBLE, STEP_NUMS_DOUBLE, \
+STEP_TEXTS_SINGLE, STEP_TOKEN_LEN_SINGLE, STEP_NUMS_SINGLE = run_dataset(
     jsonl_path=args.jsonl,
     gen_model_name=args.gen_model,
     prm_model=prm_model,          
@@ -290,7 +340,16 @@ res = {
                 "steps_text": STEP_TEXTS_ALL,
                 "generated_text": GENERATED_TEXT_ALL,
                 "solution": SOLUTION_ALL,
-                "step_token_len": STEP_TOKEN_LEN
+                "step_token_len": STEP_TOKEN_LEN,
+                
+                # Extra stats
+                "steps_text_double_newline": STEP_TEXTS_DOUBLE,
+                "step_token_len_double_newline": STEP_TOKEN_LEN_DOUBLE,
+                "step_nums_double_newline": STEP_NUMS_DOUBLE,
+                
+                "steps_text_single_newline": STEP_TEXTS_SINGLE,
+                "step_token_len_single_newline": STEP_TOKEN_LEN_SINGLE,
+                "step_nums_single_newline": STEP_NUMS_SINGLE,
             }
         }
     }

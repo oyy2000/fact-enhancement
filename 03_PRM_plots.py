@@ -29,16 +29,21 @@ except ImportError:
 # 1. GLOBAL CONFIGURATION & PATHS
 # ============================================================
 
+REWRITE_PATH = "gpt_rewrites_unified"
 # User Paths
-PREFIX = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/gpt_rewrites/Qwen_Qwen2.5-3B-Instruct_expert_leap/vectors_50_expert_leap/Qwen_Qwen2.5-3B-Instruct_applied/"
+PROMPT_STYLE = "expert_leap"  # "old" or "expert_leap"
+TASK = "gsm8k_cot_zeroshot_unified" # "gsm8k_cot_zeroshot_unified"
+# PREFIX = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/gpt_rewrites_unified/Qwen_Qwen2.5-3B-Instruct/vectors_50_old/Qwen_Qwen2.5-3B-Instruct_applied/"
+PREFIX = f"/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/{REWRITE_PATH}/Qwen_Qwen2.5-3B-Instruct/vectors_50_{PROMPT_STYLE}/Qwen_Qwen2.5-3B-Instruct_applied/"
+
 FOLDER = os.path.join(PREFIX, "prm_results")
-BASE_DIR = os.path.join(PREFIX, "gsm8k_cot_zeroshot")
+BASE_DIR = os.path.join(PREFIX, TASK)
 PRM_MODEL = "Qwen/Qwen2.5-Math-PRM-7B"
 
 # Set to TRUE to enable expensive model-based metrics (PPL, KL, Rank Shift)
 # This will try to load the model on GPU.
-ENABLE_PRM_SCORING = False
-ENABLE_MODEL_METRICS = False
+ENABLE_PRM_SCORING = True
+ENABLE_MODEL_METRICS = True
 ENABLE_PLOTTING = True
 
 os.makedirs(FOLDER, exist_ok=True)
@@ -49,28 +54,10 @@ for sub in ["correct_wrong", "scatter", "special", "all", "per_step_avg", "reaso
 NUM_GPUS = 8
 GPU_IDS = [0, 1, 2, 3, 4, 5, 6, 7]
 
-STEP = 0.5
-STEER_LAMBDAS = [i * STEP for i in range(-5, 6)]
-STEER_LAMBDAS = [0.0]
-
-def lam_to_str(lam: float) -> str:
-    if abs(lam) < 1e-9:
-        return "BASELINE"
-    sign = "-" if lam < 0 else ""
-    s = f"{abs(lam):.2f}".rstrip("0")
-    if s.endswith("."): s += "0"
-    s = s.replace(".", "p")
-    return f"lam{sign}{s}"
-
-lam_values = [lam_to_str(lam) for lam in STEER_LAMBDAS]
-
 MODEL_MAP = {
     "Qwen2.5-32B-Instruct": "Qwen/Qwen2.5-32B-Instruct",
 }
 
-MODEL_TO_LAYERS = {
-    "Qwen2.5-32B-Instruct": [1],
-}
 
 STATUS_FILE = os.path.join(FOLDER, "job_status.json")
 
@@ -256,23 +243,6 @@ class ModelEvaluator:
 
 
 # ============================================================
-# 3. METRIC EXTRACTION
-# ============================================================
-
-THRESHOLD = 0.9
-
-def lam_to_float(lam):
-    if lam == "BASELINE": return 0.0
-    return float(lam[3:].replace("p", "."))
-
-def detect_layers(model_data): return list(model_data.keys())
-def detect_lambdas(model_data, L): return list(model_data[L].keys())
-def _safe_name(s): return s.replace("/", "_").replace(" ", "_").replace(":", "_").replace("__", "_")
-
-
-
-
-# ============================================================
 # 4. WORKER FUNCTION
 # ============================================================
 
@@ -311,7 +281,7 @@ def worker(job_idx, job, gpu_id):
                 success = False
             else:
                 with open(out_file, 'r') as f:
-                data = json.load(f)
+                    data = json.load(f)
 
             # Locate the entry in the potentially nested dictionary
             # data structure: {model: {L: {lam: entry}}}
@@ -332,13 +302,14 @@ def worker(job_idx, job, gpu_id):
                     ppl_list = []
                     rank_list = []
                     token_ranks_list = []
+                    most_shifted_list = []
                     
                     data_idx = 0
 
                     for text in texts:
-                        # ppl, rank = evaluator.compute_ppl_and_rank(text)
-                        # ppl_list.append(ppl)
-                        # rank_list.append(rank)
+                        ppl, rank = evaluator.compute_ppl_and_rank(text)
+                        ppl_list.append(ppl)
+                        rank_list.append(rank)
                         
                         # Find corresponding prompt
                         prompt = ""
@@ -356,13 +327,19 @@ def worker(job_idx, job, gpu_id):
                         
                         if prompt:
                             tr = evaluator.compute_rank_shift(prompt, text)
-                            token_ranks_list.append(tr)
+                            # token_ranks_list.append(tr)
+                            
+                            # Find most shifted tokens
+                            mst = evaluator.find_most_shifted_tokens(tr, top_k=20)
+                            most_shifted_list.append(mst)
                         else:
-                            token_ranks_list.append([])
+                            # token_ranks_list.append([])
+                            most_shifted_list.append([])
                         
-                    # entry["ppl"] = ppl_list
-                    # entry["rank_shift"] = rank_list
+                    entry["ppl"] = ppl_list
+                    entry["rank_shift"] = rank_list
                     entry["token_rank_shifts"] = token_ranks_list
+                    entry["most_shifted_tokens"] = most_shifted_list
                     
                     # Save back to file
                     with open(out_file, 'w') as f:

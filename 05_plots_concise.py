@@ -209,6 +209,8 @@ def main():
 
     plot_per_step_avg_correctness(max_steps=15)
 
+    plot_split_strategy_impact()
+
 if __name__ == "__main__":
     main()
 
@@ -830,3 +832,123 @@ def plot_avg_error_steps_vs_acc():
     plt.close()
     print("Saved:", out_path)
  
+def plot_split_strategy_impact():
+    """
+    Plots the impact of different splitting strategies (Double vs Single newline)
+    on token counts and step counts.
+    """
+    outdir = f"{SAVE_ROOT}/special" 
+    os.makedirs(outdir, exist_ok=True)
+
+    # 1. Avg Total Tokens Per Sample (Double vs Single) vs Lambda
+    plt.figure(figsize=(10, 6))
+    
+    has_data = False
+
+    for model_name, model_data in model_results.items():
+        layers = detect_layers(model_data)
+        for L in layers:
+            lambdas = detect_lambdas(model_data, L)
+            
+            lam_vals = []
+            tokens_double = []
+            tokens_single = []
+
+            for lam in lambdas:
+                entry = model_data[L][lam]
+                # Check if new stats exist
+                if "step_token_len_double_newline" not in entry or "step_token_len_single_newline" not in entry:
+                    continue
+                
+                has_data = True
+                
+                # Double Newline
+                lens_d = entry["step_token_len_double_newline"]
+                avg_total_d = np.mean([np.sum(s) for s in lens_d])
+                
+                # Single Newline
+                lens_s = entry["step_token_len_single_newline"]
+                avg_total_s = np.mean([np.sum(s) for s in lens_s])
+
+                lam_vals.append(lam_to_float(lam))
+                tokens_double.append(avg_total_d)
+                tokens_single.append(avg_total_s)
+
+            if not lam_vals:
+                continue
+
+            # Sort
+            idx = np.argsort(lam_vals)
+            lam_vals = np.array(lam_vals)[idx]
+            tokens_double = np.array(tokens_double)[idx]
+            tokens_single = np.array(tokens_single)[idx]
+
+            color = MODEL_COLOR_MAP[model_name]
+            
+            plt.plot(lam_vals, tokens_double, marker="o", linestyle="-", color=color, label=f"{model_name} (Double \\n\\n)")
+            plt.plot(lam_vals, tokens_single, marker="x", linestyle="--", color=color, alpha=0.7, label=f"{model_name} (Single \\n)")
+
+    if has_data:
+        plt.title("Impact of Split Strategy on Avg Total Tokens")
+        plt.xlabel("λ")
+        plt.ylabel("Avg Total Tokens per Sample")
+        plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+        plt.grid(alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(f"{outdir}/split_strategy_tokens.png", dpi=300)
+        plt.close()
+        print(f"Saved: {outdir}/split_strategy_tokens.png")
+
+
+    # 2. Avg Number of Steps (Double vs Single) vs Lambda
+    plt.figure(figsize=(10, 6))
+    has_data = False
+
+    for model_name, model_data in model_results.items():
+        layers = detect_layers(model_data)
+        for L in layers:
+            lambdas = detect_lambdas(model_data, L)
+            
+            lam_vals = []
+            steps_double = []
+            steps_single = []
+
+            for lam in lambdas:
+                entry = model_data[L][lam]
+                if "step_nums_double_newline" not in entry or "step_nums_single_newline" not in entry:
+                    continue
+                
+                has_data = True
+                
+                # We saved list of counts directly in `step_nums_...`?
+                # Wait, in 07_run_prm_single.py:
+                # STEP_NUMS_DOUBLE.append(len(sd)) -> So it is a list of ints (one per sample)
+                
+                avg_params_d = np.mean(entry["step_nums_double_newline"])
+                avg_params_s = np.mean(entry["step_nums_single_newline"])
+                
+                lam_vals.append(lam_to_float(lam))
+                steps_double.append(avg_params_d)
+                steps_single.append(avg_params_s)
+            
+            if not lam_vals: continue
+
+            idx = np.argsort(lam_vals)
+            lam_vals = np.array(lam_vals)[idx]
+            steps_double = np.array(steps_double)[idx]
+            steps_single = np.array(steps_single)[idx]
+
+            color = MODEL_COLOR_MAP[model_name]
+            plt.plot(lam_vals, steps_double, marker="o", linestyle="-", color=color, label=f"{model_name} (Double \\n\\n)")
+            plt.plot(lam_vals, steps_single, marker="x", linestyle="--", color=color, alpha=0.7, label=f"{model_name} (Single \\n)")
+
+    if has_data:
+        plt.title("Impact of Split Strategy on Avg Step Count")
+        plt.xlabel("λ")
+        plt.ylabel("Avg Number of Steps")
+        plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+        plt.grid(alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(f"{outdir}/split_strategy_steps.png", dpi=300)
+        plt.close()
+        print(f"Saved: {outdir}/split_strategy_steps.png")
