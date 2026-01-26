@@ -12,48 +12,84 @@ import sys
 import shlex
 import json
 
-# ========= 配置区（按需修改） =========
-step_config = {"old": 1, "expert_leap": 0.01}
+# ==========================================
+# 1. 核心控制开关
+# ==========================================
+# 选项: "GPT_REWRITE" (3B实验) 或 "LARGE_MODEL" (0.5B实验)
+EXPERIMENT_MODE = "GPT_REWRITE" 
 
-
+# ==========================================
+# 2. 公共配置 (两个实验共用)
+# ==========================================
 GPUS = [0, 1, 2, 3, 4, 5, 6, 7]
-REWRITE_MODEL = "Qwen/Qwen2.5-3B-Instruct"
-APPLIED_MODEL = "Qwen/Qwen2.5-3B-Instruct" + "_applied"
-REWRITE_PATH = "./gpt_rewrites_unified/"
-PROMPT_STYLE = "old" #old  # "sml" 或 "lib"
-VECTOR_DIR = REWRITE_PATH + REWRITE_MODEL.replace("/", "_") + f"/vectors_50_{PROMPT_STYLE}/" + APPLIED_MODEL.replace("/", "_")
-
-TASKS = "gsm8k_cot_zeroshot_unified" #"gsm8k_cot_zeroshot_unified" # "hendrycks_math_500,AIME,AMC" #"gsm8k_cot_zeroshot"
-BASE_OUTDIR = os.path.join(VECTOR_DIR, TASKS.replace(",", "_").replace(" ", "_") + "_selected_layers")
-# Path(VECTOR_DIR) / TASKS.replace(",", "_").replace(" ", "_") / "all_layer"
-# 2. 设置生成参数
-# max_gen_toks 控制生成长度，CoT 建议设大一点
+TASKS = "gsm8k_cot_zeroshot_unified" 
 GEN_KWARGS = "max_gen_toks=2048,temperature=0,do_sample=False"
-MODEL = "steer_hf"  # 假设这里是 steer_hf_sml
-LIMIT = "1000" #"100"
-
+MODEL = "steer_hf"
 NUM_FEWSHOT = "0"
 APPLY_CHAT_TEMPLATE = True
+LIMIT = 128
 BATCH_SIZE = "128"
+APPLIED_MODEL = "Qwen/Qwen2.5-3B-Instruct" 
+REWRITE_MODEL = "Qwen/Qwen2.5-3B-Instruct"
 
-STEP = 0.2
-STEER_LAMBDAS = [i * STEP for i in range(-20, 21)]  # -1.0..1.0
+
+STEP = 1
+STEER_LAMBDAS = [i * STEP for i in range(-10, 11)]  # -1.0..1.0
 # 或者保留两位，保证打印一致
 STEER_LAMBDAS = [round(x, 2) for x in STEER_LAMBDAS]
 
-# STEER_LAMBDAS = [0.0] # 0.2, 0.4, 0.6, -0.2, -0.4, -0.6,
-# PRETRAINEDS = [
-#     "meta-llama/Llama-3.1-8B-Instruct",
-#     "meta-llama/Llama-3.2-1B-Instruct",
-#     "meta-llama/Llama-3.2-3B-Instruct",
-#     # "meta-llama/Llama-3.1-70B-Instruct",
-#     # "mistralai/Mistral-7B-Instruct-v0.3",
-#     "Qwen/Qwen2.5-0.5B-Instruct",
-#     "Qwen/Qwen2.5-1.5B-Instruct",
-#     "Qwen/Qwen2.5-3B-Instruct",
-#     "Qwen/Qwen2.5-7B-Instruct",
-#     "Qwen/Qwen2.5-14B-Instruct",
-# ]
+applied_sanitized = APPLIED_MODEL.replace("/", "_") + "_applied"
+rewrite_sanitized = REWRITE_MODEL.replace("/", "_")
+
+# ==========================================
+# 3. 差异化配置
+# ==========================================
+if EXPERIMENT_MODE == "GPT_REWRITE":
+    step_config = {"old": 1, "expert_leap": 0.01}
+    REWRITE_PATH = "./gpt_rewrites_unified_new/"
+    PROMPT_STYLE = "old"
+    VECTOR_DIR = os.path.join(
+        REWRITE_PATH,
+        rewrite_sanitized, 
+        f"vectors_50_{PROMPT_STYLE}", 
+        applied_sanitized
+        )
+
+    # 输出后缀 & 运行参数
+    outdir_suffix = "_all_layers"
+
+
+elif EXPERIMENT_MODE == "LARGE_MODEL":
+    REWRITE_PATH = "./large_model_rewrites_unified/"
+    VECTOR_DIR = os.path.join(
+        REWRITE_PATH, 
+        applied_sanitized, 
+        f"vectors_50_paired_{rewrite_sanitized}", 
+        applied_sanitized  
+    )
+    # 输出后缀 & 运行参数
+    outdir_suffix = "_all_layers"
+
+else:
+    raise ValueError(f"Unknown EXPERIMENT_MODE: {EXPERIMENT_MODE}")
+
+
+
+    
+# ==========================================
+# 4. 最终路径组装
+# ==========================================
+task_sanitized = TASKS.replace(",", "_").replace(" ", "_")
+BASE_OUTDIR = os.path.join(VECTOR_DIR, task_sanitized + outdir_suffix)
+
+# ==========================================
+# 打印检查 (Optional)
+# ==========================================
+print(f"Mode: {EXPERIMENT_MODE}")
+print(f"Vector Dir:  {VECTOR_DIR}")
+print(f"Base Outdir: {BASE_OUTDIR}")
+print(f"Batch Size:  {BATCH_SIZE}, Limit: {LIMIT}")
+
 PRETRAINEDS = [
     # "meta-llama/Llama-3.1-8B-Instruct",
     # "meta-llama/Llama-3.2-1B-Instruct",
@@ -69,10 +105,11 @@ all_layers = [1] #[4,8,12,16,18,24,30,32,36]
 MODEL_TO_LAYERS = {
     # "Qwen/Qwen2.5-14B-Instruct": [15, 23, 31],# 
     # "Qwen/Qwen2.5-7B-Instruct": [13, 23, 27],
-    # "Qwen/Qwen2.5-1.5B-Instruct": [0, 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28],
+    # "Qwen/Qwen2.5-1.5B-Instruct": [0, 2, 4, 6, 8,10,12,14,16,18,20,22,24,26,28],
     # "Qwen/Qwen2.5-0.5B-Instruct": [11, 19, 23],
-    # "Qwen/Qwen2.5-3B-Instruct":   [0, 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36],
-    "Qwen/Qwen2.5-3B-Instruct":   [9, 23, 26, 35],
+    # "Qwen/Qwen2.5-3B-Instruct":   [9, 23, 26, 35],
+    "Qwen/Qwen2.5-3B-Instruct":   [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36],
+    # "Qwen/Qwen2.5-3B-Instruct":   [8, 10, 24],
     # "meta-llama/Llama-3.2-1B-Instruct": [8], #[8,12,16]
     # "meta-llama/Llama-3.2-3B-Instruct": [8], #[16,24,32]
     # "meta-llama/Llama-3.1-8B-Instruct": [8],#[16,24,32]
@@ -92,7 +129,7 @@ MODEL_TO_LAYERS = {
 
 
 # 每个新 job 至少需要的空闲显存（MB）。可以视自己的模型大小调。
-MIN_FREE_MEM_MB_PER_JOB = 20000  # 例如 20GB
+MIN_FREE_MEM_MB_PER_JOB = 10000  # 例如 20GB
 # 每块 GPU 上最多允许同时跑几个进程
 MAX_PROCS_PER_GPU = 1
 
@@ -223,12 +260,14 @@ class Job:
             "--num_fewshot", str(NUM_FEWSHOT), # 确保转为 str
             "--batch_size", BATCH_SIZE,    # 【加速】关键
             "--gen_kwargs", GEN_KWARGS,        # 【控制长度】关键
-            "--output_path", str(self.outdir),
-            "--log_samples",
         ]
         if LIMIT:
             cmd.extend(["--limit", str(LIMIT)])
-        
+            
+        cmd.extend([
+            "--output_path", str(self.outdir),
+            "--log_samples",
+        ])
         if APPLY_CHAT_TEMPLATE:
             cmd.append("--apply_chat_template")
 

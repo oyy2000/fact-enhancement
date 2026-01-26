@@ -1,0 +1,94 @@
+[
+  {
+    "doc_id": 1317,
+    "doc": {
+      "question": "Farmer Brown has 20 animals on his farm, all either chickens or cows. They have a total of 70 legs, all together. How many of the animals are chickens?",
+      "answer": "Let C be the number of chickens.\nThere are 20-C cows.\nThe cows have 4*(20-C) legs.\nThe cows have 2C legs.\nThe total number of legs is 2C+4(20-C)=70.\n2C+80-4C=70\n2C=10\nC=<<5=5>>5\n#### 5"
+    },
+    "target": "Let C be the number of chickens.\nThere are 20-C cows.\nThe cows have 4*(20-C) legs.\nThe cows have 2C legs.\nThe total number of legs is 2C+4(20-C)=70.\n2C+80-4C=70\n2C=10\nC=<<5=5>>5\n#### 5",
+    "arguments": {
+      "gen_args_0": {
+        "arg_0": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\nSolve the following math problem. Present the final answer in the format: Final Answer: \\boxed{your_answer}.\nProlbem: Farmer Brown has 20 animals on his farm, all either chickens or cows. They have a total of 70 legs, all together. How many of the animals are chickens?\nAnswer:<|im_end|>\n<|im_start|>assistant\n",
+        "arg_1": {
+          "until": [
+            "Q:",
+            "</s>",
+            "<|im_end|>",
+            "<|eot_id|>",
+            "<|start_header_id|>user<|end_header_id|>"
+          ],
+          "do_sample": false,
+          "max_gen_toks": 2048,
+          "temperature": 0
+        }
+      }
+    },
+    "resps": [
+      [
+        "To solve this problem, we can set up a system of equations based on the information given.\n\nLet's define:\n- \\( c \\) as the number of chickens.\n- \\( h \\) as the number of cows.\n\nFrom the problem, we know two things:\n1. The total number of animals is 20.\n2. The total number of legs is 70.\n\nWe can translate these into the following equations:\n1. \\( c + h = 20 \\)\n2. \\( 2c + 4h = 70 \\) (since each chicken has 2 legs and each cow has 4 legs)\n\nFirst, we can simplify the second equation by dividing everything by 2:\n\\[ c + 2h = 35 \\]\n\nNow we have the simplified system of equations:\n1. \\( c + h = 20 \\)\n2. \\( c + 2h = 35 \\)\n\nNext, we can subtract the first equation from the second to eliminate \\( c \\):\n\\[ (c + 2h) - (c + h) = 35 - 20 \\]\n\\[ c + 2h - c - h = 15 \\]\n\\[ h = 15 \\]\n\nSo, there are 15 cows. Now we substitute \\( h = 15 \\) back into the first equation to find \\( c \\):\n\\[ c + 15 = 20 \\]\n\\[ c = 5 \\]\n\nTherefore, there are 5 chickens. \n\nFinal Answer: \\(\\boxed{5}\\)"
+      ]
+    ],
+    "filtered_resps": [
+      "5"
+    ],
+    "filter": "flexible-extract",
+    "metrics": [
+      "exact_match"
+    ],
+    "doc_hash": "13b5d072ad663c6f26400383aded8bbd6be8e9115078b2639c826e14b20ad6dc",
+    "prompt_hash": "fe80bb7200e039ee223bbc449ee17e8e38b3005b4c4788b895c68d5019b5b939",
+    "target_hash": "1e9ba773727b76dc8f32986072247cb255df0909d126f5b672a4bda383eaf3be",
+    "exact_match": 1.0,
+    "rewrite_index": 2636,
+    "resp_before": "To solve this problem, we can set up a system of equations based on the information given.\n\nLet's define:\n- \\( c \\) as the number of chickens.\n- \\( h \\) as the number of cows.\n\nFrom the problem, we know two things:\n1. The total number of animals is 20.\n2. The total number of legs is 70.\n\nWe can translate these into the following equations:\n1. \\( c + h = 20 \\)\n2. \\( 2c + 4h = 70 \\) (since each chicken has 2 legs and each cow has 4 legs)\n\nFirst, we can simplify the second equation by dividing everything by 2:\n\\[ c + 2h = 35 \\]\n\nNow we have the simplified system of equations:\n1. \\( c + h = 20 \\)\n2. \\( c + 2h = 35 \\)\n\nNext, we can subtract the first equation from the second to eliminate \\( c \\):\n\\[ (c + 2h) - (c + h) = 35 - 20 \\]\n\\[ c + 2h - c - h = 15 \\]\n\\[ h = 15 \\]\n\nSo, there are 15 cows. Now we substitute \\( h = 15 \\) back into the first equation to find \\( c \\):\n\\[ c + 15 = 20 \\]\n\\[ c = 5 \\]\n\nTherefore, there are 5 chickens. \n\nFinal Answer: \\(\\boxed{5}\\)",
+    "resp_after": "First, using the total of 20 animals and 70 legs, treating chickens as 2-legged and cows as 4-legged, the leg equation becomes \\(2c + 4(20 - c) = 70\\), since the cows make up the rest of the 20 animals.  \n\nNext, expanding and combining terms gives \\(2c + 80 - 4c = 70\\), which simplifies to \\(-2c + 80 = 70\\).  \n\nThen, moving 80 to the other side yields \\(-2c = 70 - 80 = -10\\), so dividing by \\(-2\\) gives \\(c = 5\\).  \n\nFinally, this means there are 5 chickens on Farmer Brown’s farm.",
+    "resp_rewrite_ok": true,
+    "resp_rewrite_style": "mimic_14b"
+  },
+  {
+    "doc_id": 1318,
+    "doc": {
+      "question": "Henry and 3 of his friends order 7 pizzas for lunch. Each pizza is cut into 8 slices. If Henry and his friends want to share the pizzas equally, how many slices can each of them have?",
+      "answer": "There are 7*8=<<7*8=56>>56 slices in total.\nThere are 1+3=<<1+3=4>>4 people in total.\nThey can each have 56/4=<<56/4=14>>14 slices.\n#### 14"
+    },
+    "target": "There are 7*8=<<7*8=56>>56 slices in total.\nThere are 1+3=<<1+3=4>>4 people in total.\nThey can each have 56/4=<<56/4=14>>14 slices.\n#### 14",
+    "arguments": {
+      "gen_args_0": {
+        "arg_0": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\nSolve the following math problem. Present the final answer in the format: Final Answer: \\boxed{your_answer}.\nProlbem: Henry and 3 of his friends order 7 pizzas for lunch. Each pizza is cut into 8 slices. If Henry and his friends want to share the pizzas equally, how many slices can each of them have?\nAnswer:<|im_end|>\n<|im_start|>assistant\n",
+        "arg_1": {
+          "until": [
+            "Q:",
+            "</s>",
+            "<|im_end|>",
+            "<|eot_id|>",
+            "<|start_header_id|>user<|end_header_id|>"
+          ],
+          "do_sample": false,
+          "max_gen_toks": 2048,
+          "temperature": 0
+        }
+      }
+    },
+    "resps": [
+      [
+        "To solve this problem, we need to determine how many slices of pizza each person can get if Henry and his 3 friends (making a total of 4 people) share 7 pizzas equally.\n\nFirst, calculate the total number of pizza slices:\n- Each pizza is cut into 8 slices.\n- There are 7 pizzas.\n\nTotal slices = Number of pizzas × Slices per pizza\n\\[ \\text{Total slices} = 7 \\times 8 = 56 \\]\n\nNext, divide the total number of slices by the number of people sharing the pizzas:\n- There are 4 people (Henry and his 3 friends).\n\nSlices per person = Total slices ÷ Number of people\n\\[ \\text{Slices per person} = \\frac{56}{4} = 14 \\]\n\nTherefore, each person can have 14 slices of pizza.\n\nFinal Answer: \\(\\boxed{14}\\)"
+      ]
+    ],
+    "filtered_resps": [
+      "14"
+    ],
+    "filter": "flexible-extract",
+    "metrics": [
+      "exact_match"
+    ],
+    "doc_hash": "3bbcbd5151a8911eff9fc12332776eb85b59eed44d6a131550b2f0e5cada8d67",
+    "prompt_hash": "c77cf873b3b857d482fb5ea99aa43ad4f0f5034afa15975dae46da15eead247d",
+    "target_hash": "bf7bdb51601a1f4dad96497cd985aab91bfabcf79107742ee71f229a47596c38",
+    "exact_match": 1.0,
+    "rewrite_index": 2637,
+    "resp_before": "To solve this problem, we need to determine how many slices of pizza each person can get if Henry and his 3 friends (making a total of 4 people) share 7 pizzas equally.\n\nFirst, calculate the total number of pizza slices:\n- Each pizza is cut into 8 slices.\n- There are 7 pizzas.\n\nTotal slices = Number of pizzas × Slices per pizza\n\\[ \\text{Total slices} = 7 \\times 8 = 56 \\]\n\nNext, divide the total number of slices by the number of people sharing the pizzas:\n- There are 4 people (Henry and his 3 friends).\n\nSlices per person = Total slices ÷ Number of people\n\\[ \\text{Slices per person} = \\frac{56}{4} = 14 \\]\n\nTherefore, each person can have 14 slices of pizza.\n\nFinal Answer: \\(\\boxed{14}\\)",
+    "resp_after": "First, counting all the slices from 7 pizzas cut into 8 slices each gives \\(7 \\times 8 = 56\\) slices in total.  \nNext, noticing that Henry and his 3 friends make 4 people altogether, the sharing involves dividing 56 slices among 4 people.  \nThen, carrying out this division gives \\(56 \\div 4 = 14\\) slices for each person.  \nFinally, each of them ends up with 14 slices of pizza.",
+    "resp_rewrite_ok": true,
+    "resp_rewrite_style": "mimic_14b"
+  }
+]

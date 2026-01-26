@@ -30,9 +30,10 @@ from openai import OpenAI  # pip install openai
 # -----------------------------
 # Defaults
 # -----------------------------
-REWRITE_FOLDER = "gpt_rewrites_unified"
-MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct".replace("/", "_")
-IN_JSONL = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-3B-Instruct_no_vector/Qwen__Qwen2.5-3B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-33-55.190404.jsonl"
+REWRITE_FOLDER = "gpt_rewrites_unified_new"
+MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct".replace("/", "_")
+IN_JSONL= "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-1.5B-Instruct_no_vector/Qwen__Qwen2.5-1.5B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-29-34.069734.jsonl"
+# Qwen2.5_3B_PATH IN_JSONL = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-3B-Instruct_no_vector/Qwen__Qwen2.5-3B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-33-55.190404.jsonl"
 
 
 def build_prompt_concise(question: str, original_resp: str) -> str:
@@ -78,67 +79,6 @@ Original solution (model output):
 
 Now output ONLY the rewritten solution (same style, with a few necessary merges):
 """
-
-
-
-# =============================================================================
-# PROMPT BUILDERS (POSITIVE & NEGATIVE)
-# =============================================================================
-
-def build_prompt_expert_leap(question: str, original_resp: str) -> str:
-    """[POSITIVE] 极致压缩，跳过简单步骤，模拟专家直觉 (推荐用于 Layer 17)"""
-    return f"""Compress the reasoning into an "Expert Summary".
-
-1. **OMIT TRIVIAL OPS:** Do NOT show simple addition/subtraction steps (e.g., do not write "3+4=7" or "16-7=9"). Assume the reader can do mental math.
-2. **FOCUS ON THE PIVOT:** Only show the setup of the final meaningful calculation.
-3. **MAXIMUM COMPRESSION:** The entire solution must be fewer than 20 words if possible.
-4. **DIRECT ANSWER:** Start directly with the core logic. No "First...", "Then...".
-
-Question:
-{question}
-
-Original solution:
-{original_resp}
-
-Output the Expert Summary (plain text only):
-"""
-
-def build_prompt_symbolic(question: str, original_resp: str) -> str:
-    """[POSITIVE] 强制代数符号化，最大化符号密度"""
-    return f"""Rewrite the solution to maximize "Symbolic Density". Follow these rules:
-
-1. **DEFINE & COMPUTE:** Define variables and perform the initial computation in the SAME line. Do not write "Let x be...". Just use it.
-2. **NO TEXTUAL ARITHMETIC:** Never describe an operation in words (e.g., "add the blue and white fiber"). Use the equation to speak for itself.
-3. **SINGLE BLOCK:** Do not use bullet points or numbered lists. The output should be 1-2 dense lines of mathematical logic.
-4. **LATEX:** Use LaTeX formatting for all numbers and operations.
-
-Question:
-{question}
-
-Original solution:
-{original_resp}
-
-Output the Symbolic Rewrite:
-"""
-
-def build_prompt_no_meta(question: str, original_resp: str) -> str:
-    """[POSITIVE] 去除元认知，只保留客观因果"""
-    return f"""You are a rewriting engine designed to strip away all "meta-cognitive" fluff.
-
-1. **BANISH THE NARRATOR:** Do NOT use phrases like "First, we calculate...", "Next, we determine...", "To find the answer...", or "Step X".
-2. **MERGE CAUSALITY:** Combine the cause and the effect into single sentences. Do not split "The calculation is X" and "The result is Y".
-3. **REMOVE HEADERS:** Remove all bold headers.
-4. **FLOW:** The output must read like a factual report, not a tutorial.
-
-Question:
-{question}
-
-Original solution:
-{original_resp}
-
-Output the Objective Rewrite:
-"""
-
 
 def build_prompt_explicit_reference(question: str, original_resp: str) -> str:
     """
@@ -246,14 +186,15 @@ def build_prompt_mimic_3b_7b(question: str, original_resp: str) -> str:
 
 # Map strategy names to functions
 PROMPT_STRATEGIES = {
-    "expert_leap": build_prompt_expert_leap,
-    "symbolic": build_prompt_symbolic,
-    "no_meta": build_prompt_no_meta,
-    "neurotic": build_prompt_neurotic,
-    "micro_step": build_prompt_micro_step,
-    "bloat": build_prompt_bloat,
+    # "expert_leap": build_prompt_expert_leap,
+    # "symbolic": build_prompt_symbolic,
+    # "no_meta": build_prompt_no_meta,
     "concise": build_prompt_concise,
     "old": build_prompt_old,
+    "explicit_reference": build_prompt_explicit_reference,
+    "implicit_context": build_prompt_implicit_context,
+    "mimic_14b": build_prompt_mimic_14b,
+    "mimic_3b_7b": build_prompt_mimic_3b_7b,
 }
 
 # =============================================================================

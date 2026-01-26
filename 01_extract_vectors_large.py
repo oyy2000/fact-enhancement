@@ -12,25 +12,61 @@ from steering_vectors import train_steering_vector, SteeringVector
 # =====================
 # ===== CONFIG ========
 # =====================
-TARGET_MODEL = "Qwen/Qwen2.5-3B-Instruct"
+EXPERIMENT_MODE = "GPT_REWRITE" 
+TARGET_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
+# 层索引配置 (3B range 37)
 model_name_to_layer_index = {
-    # "Qwen/Qwen2.5-1.5B-Instruct": [i for i in range(28)], # Simply all layers
-    "Qwen/Qwen2.5-3B-Instruct": [i for i in range(37)],
-
+    # "Qwen/Qwen2.5-3B-Instruct": [i for i in range(37)],
+    "Qwen/Qwen2.5-1.5B-Instruct": [i for i in range(29)],
+    # "Qwen/Qwen2.5-0.5B-Instruct": [i for i in range(25)],
 }
+
+# 通用配置
 NUM_EXAMPLES = 50
-DIR_PATH = "./gpt_rewrites_unified_new" #"./gpt_rewrites_unified"  
-PROMPT_STYLE = "old"  # 核心变量：修改这里即可切换不同实验
-REWRITEEN_SAMPLE_PATH = os.path.join(DIR_PATH, TARGET_MODEL.replace("/", "_"))
 
-model_name_to_sample_paths = {
-    "Qwen/Qwen2.5-3B-Instruct": os.path.join(REWRITEEN_SAMPLE_PATH, f"rewritten_{PROMPT_STYLE}.json")
-}
+if EXPERIMENT_MODE == "GPT_REWRITE":
+    DIR_PATH = "./gpt_rewrites_unified_new"
+    PROMPT_STYLE = "old"  # 核心变量：仅在此模式下生效
+    
+    # 构造路径
+    REWRITEEN_SAMPLE_PATH = os.path.join(DIR_PATH, TARGET_MODEL.replace("/", "_"))
+    
+    model_name_to_sample_paths = {
+        TARGET_MODEL: os.path.join(REWRITEEN_SAMPLE_PATH, f"rewritten_{PROMPT_STYLE}.json")
+    }
+    
+    # 输出目录
+    root_out_dir = Path(REWRITEEN_SAMPLE_PATH) / f"vectors_{NUM_EXAMPLES}_{PROMPT_STYLE}"
 
+elif EXPERIMENT_MODE == "LARGE_MODEL":
+    # === 逻辑 2: Large Model Rewrites (Qwen 0.5B) ===
+    DIR_PATH = "./large_model_rewrites_unified"
+    REWRITE_MODEL = "Qwen/Qwen2.5-14B-Instruct" # 仅在此模式下生效
+    
+    # 构造路径
+    REWRITEEN_SAMPLE_PATH = os.path.join(DIR_PATH, TARGET_MODEL.replace("/", "_"))
+    
+    model_name_to_sample_paths = {
+        TARGET_MODEL: os.path.join(REWRITEEN_SAMPLE_PATH, f"{REWRITE_MODEL.replace('/', '_')}_paired_responses.json"),
+    }
+    
+   
+    # 输出目录
+    root_out_dir = Path(REWRITEEN_SAMPLE_PATH) / f"vectors_{NUM_EXAMPLES}_paired_{REWRITE_MODEL.replace('/', '_')}"
 
+else:
+    raise ValueError(f"Unknown EXPERIMENT_MODE: {EXPERIMENT_MODE}")
 
-root_out_dir = Path(REWRITEEN_SAMPLE_PATH) / f"vectors_{NUM_EXAMPLES}_{PROMPT_STYLE}"
-root_out_dir.mkdir(exist_ok=True)
+# 创建输出目录
+root_out_dir.mkdir(exist_ok=True, parents=True)
+
+# ==========================================
+# 打印检查 (Optional)
+# ==========================================
+print(f"Current Mode: {EXPERIMENT_MODE}")
+print(f"Target Model: {TARGET_MODEL}")
+print(f"Sample Path:  {model_name_to_sample_paths[TARGET_MODEL]}")
+print(f"Output Dir:   {root_out_dir}")
 
 # =====================
 # ===== HELPERS =======
@@ -132,6 +168,20 @@ for model_name, layer_list in model_name_to_layer_index.items():
         print(f"  ✔ Successfully saved SteeringVector to {save_path}")
         # steering_vector.layer_activations 是一个 dict {layer_idx: tensor}
         print(f"     Layers in object: {list(steering_vector.layer_activations.keys())}")
+
+        # Calculate and save norms
+        norms = {}
+        # Check if layer_activations acts as a dict (keys are layer indices)
+        for layer_idx, vec in steering_vector.layer_activations.items():
+            # vec is likely a tensor of shape [hidden_dim] or [1, hidden_dim]
+            norm_val = vec.norm().item()
+            norms[layer_idx] = norm_val
+            
+        norms_path = model_out_dir / "vector_norms.json"
+        with open(norms_path, "w") as f:
+            json.dump(norms, f, indent=2)
+        print(f"  ✔ Saved vector norms to {norms_path}")
+
 
     del model
     torch.cuda.empty_cache()

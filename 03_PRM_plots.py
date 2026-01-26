@@ -411,6 +411,7 @@ if __name__ == "__main__":
             if not files: continue
             jsonl_file = files[-1]
             gen_model_name = MODEL_MAP.get(model_name, f"Qwen/{model_name}")
+            print("gen_model_name:", gen_model_name)
             jobs.append((model_name, gen_model_name, layer_str, lam_str, jsonl_file))
 
     print(f"Total jobs to run = {len(jobs)}")
