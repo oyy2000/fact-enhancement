@@ -15,13 +15,22 @@ from tqdm import tqdm
 # -----------------------------
 # Defaults
 # -----------------------------
-REWRITE_FOLDER = "large_model_rewrites_unified"
+REWRITE_FOLDER = "large_model_rewrites_unified_new"
 
 # Note: Variable names preserved from original script context
-TARGET_MODEL_JSONL = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-0.5B-Instruct_no_vector/Qwen__Qwen2.5-0.5B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-34-47.123089.jsonl"
-QWEN_14B_MODEL_SAMPLES_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-14B-Instruct_L1_BASELINE/Qwen__Qwen2.5-14B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-22T16-17-22.512044.jsonl"
-TARGET_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
-REWRITE_MODEL = "Qwen/Qwen2.5-14B-Instruct"
+
+
+QWEN_7B_MODEL_SAMPLES_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-7B-Instruct_no_vector/Qwen__Qwen2.5-7B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-34-14.746371.jsonl"
+QWEN_3B_MODEL_SAMPLES_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-3B-Instruct_no_vector/Qwen__Qwen2.5-3B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-33-55.190404.jsonl"
+LLAMA_3_1_8B_MODEL_SAMPLE_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Llama-3.1-8B-Instruct_no_vector/meta-llama__Llama-3.1-8B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-25T15-06-51.949587.jsonl"
+LLAMA_3_2_1B_MODEL_SAMPLE_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Llama-3.2-1B-Instruct_no_vector/meta-llama__Llama-3.2-1B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-44-34.344707.jsonl"
+LLAMA_3_2_3B_MODEL_SAMPLE_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Llama-3.2-3B-Instruct_no_vector/meta-llama__Llama-3.2-3B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-56-55.533987.jsonl"
+# QWEN_14B_MODEL_SAMPLES_PATH = 
+
+TARGET_MODEL_JSONL = LLAMA_3_2_1B_MODEL_SAMPLE_PATH
+REF_MODEL_JSONL = LLAMA_3_1_8B_MODEL_SAMPLE_PATH
+TARGET_MODEL = "meta-llama/Llama-3.2-1B-Instruct" #"Qwen/Qwen2.5-1.5B-Instruct"
+REWRITE_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 
 
 def get_resps_0_0(obj):
@@ -54,7 +63,7 @@ def load_jsonl(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--in_jsonl", default=TARGET_MODEL_JSONL, help="Input JSONL file path (resp_before source)")
-    ap.add_argument("--ref_jsonl", default=QWEN_14B_MODEL_SAMPLES_PATH, help="Reference JSONL file path (resp_after source)")
+    ap.add_argument("--ref_jsonl", default=REF_MODEL_JSONL, help="Reference JSONL file path (resp_after source)")
     
     # Kept for compatibility if user scripts pass it, though unused now
     ap.add_argument("--overwrite_resps", action="store_true") 

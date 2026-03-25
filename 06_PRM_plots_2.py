@@ -30,7 +30,7 @@ except ImportError:
 # ============================================================
 
 # User Paths
-PREFIX = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/gpt_rewrites/Qwen_Qwen2.5-3B-Instruct_expert_leap/vectors_50_expert_leap/Qwen_Qwen2.5-3B-Instruct_applied/"
+PREFIX = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_grid_less_tokens_3B_lib_manual_same_lib_1000samples copy"
 FOLDER = os.path.join(PREFIX, "prm_results")
 BASE_DIR = os.path.join(PREFIX, "gsm8k_cot_zeroshot")
 PRM_MODEL = "Qwen/Qwen2.5-Math-PRM-7B"
@@ -40,6 +40,7 @@ PRM_MODEL = "Qwen/Qwen2.5-Math-PRM-7B"
 ENABLE_PRM_SCORING = False
 ENABLE_MODEL_METRICS = False
 ENABLE_PLOTTING = True
+
 
 os.makedirs(FOLDER, exist_ok=True)
 SAVE_ROOT = FOLDER
@@ -71,6 +72,11 @@ MODEL_MAP = {
 MODEL_TO_LAYERS = {
     "Qwen2.5-32B-Instruct": [1],
 }
+
+PLOT_CACHE_DIR = f"{SAVE_ROOT}/plot_cache"
+os.makedirs(PLOT_CACHE_DIR, exist_ok=True)
+
+import pickle
 
 STATUS_FILE = os.path.join(FOLDER, "job_status.json")
 
@@ -311,7 +317,7 @@ def worker(job_idx, job, gpu_id):
                 success = False
             else:
                 with open(out_file, 'r') as f:
-                data = json.load(f)
+                    data = json.load(f)
 
             # Locate the entry in the potentially nested dictionary
             # data structure: {model: {L: {lam: entry}}}
@@ -387,17 +393,19 @@ def run_all_plots(model_results):
     # We must call setup_plotting to initialize globals in 05_plots_concise
     plots_concise.setup_plotting(model_results, SAVE_ROOT)
     
-    print("\n=== Generating Correct-vs-Wrong plots ===")
-    plots_concise.plot_correct_wrong()
+    # print("\n=== Generating Correct-vs-Wrong plots ===")
+    # plots_concise.plot_correct_wrong()
 
     print("\n=== Generating All-sample plots ===")
-    plots_concise.plot_all()
+    plots_concise.build_plot_all_cache()
 
-    plots_concise.plot_avg_score_vs_acc()
-    plots_concise.plot_avg_tokens_vs_acc()
-    plots_concise.plot_avg_total_tokens_vs_acc()
-    plots_concise.plot_avg_steps_vs_acc()
-    plots_concise.plot_avg_error_steps_vs_acc()
+    plots_concise.plot_all()
+    
+    # plots_concise.plot_avg_score_vs_acc()
+    # plots_concise.plot_avg_tokens_vs_acc()
+    # plots_concise.plot_avg_total_tokens_vs_acc()
+    # plots_concise.plot_avg_steps_vs_acc()
+    # plots_concise.plot_avg_error_steps_vs_acc()
 
     # plots_concise.plot_per_step_avg_correctness(max_steps=15)
     
@@ -469,26 +477,26 @@ if __name__ == "__main__":
 
     # Merge Results
     final = {}
-    chunk_files = sorted(glob.glob(f"{FOLDER}/results_chunk_*.json"))
-    if chunk_files:
-        print(f"Merging {len(chunk_files)} chunk files...")
-        for f in chunk_files:
-            try:
-                part = json.load(open(f))
-                for model in part:
-                    final.setdefault(model, {})
-                    for L in part[model]:
-                        final[model].setdefault(L, {})
-                        for lam in part[model][L]:
-                            final[model][L][lam] = part[model][L][lam]
-            except Exception as e: print(f"Error {f}: {e}")
+    # chunk_files = sorted(glob.glob(f"{FOLDER}/results_chunk_*.json"))
+    # if chunk_files:
+    #     print(f"Merging {len(chunk_files)} chunk files...")
+    #     for f in chunk_files:
+    #         try:
+    #             part = json.load(open(f))
+    #             for model in part:
+    #                 final.setdefault(model, {})
+    #                 for L in part[model]:
+    #                     final[model].setdefault(L, {})
+    #                     for lam in part[model][L]:
+    #                         final[model][L][lam] = part[model][L][lam]
+    #         except Exception as e: print(f"Error {f}: {e}")
         
-        merged_path = f"{FOLDER}/results_merged.json"
-        with open(merged_path, "w") as f: json.dump(final, f, indent=2)
+    #     merged_path = f"{FOLDER}/results_merged.json"
+    #     with open(merged_path, "w") as f: json.dump(final, f, indent=2)
 
-    # merged_path = f"{FOLDER}/results_merged.json"
-    # if not os.path.exists(merged_path):
-    #     print("❌ No results found. Exiting."); exit()
+    merged_path = f"{FOLDER}/results_merged.json"
+    if not os.path.exists(merged_path):
+        print("❌ No results found. Exiting."); exit()
 
     print("\n>>> STARTING PLOTTING")
     if ENABLE_PLOTTING:

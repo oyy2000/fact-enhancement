@@ -19,81 +19,71 @@ from utils import qwen_chat_prompt
 # ==========================================
 # 配置参数
 # ==========================================
-# 观察者模型 (Student)
-MODEL_PATH = "Qwen/Qwen2.5-1.5B-Instruct" 
-SAMPLE_LIMIT = 200 # 按照要求取 200 条
+MODEL_PATH = "Qwen/Qwen2.5-3B-Instruct"  # Observer/Student
+SAMPLE_LIMIT = 200
 
-# 数据路径
-PATH_SAME_FAMILY_14B = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-14B-Instruct_L1_BASELINE/Qwen__Qwen2.5-14B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-22T16-17-22.512044.jsonl"
-PATH_SAME_FAMILY_32B = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-32B-Instruct_L1_BASELINE/Qwen__Qwen2.5-32B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-25T03-44-06.551722.jsonl"
-PATH_SAME_FAMILY_72B = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-72B-Instruct_L1_BASELINE/Qwen__Qwen2.5-72B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-22T21-14-55.626811.jsonl"
-PATH_SAME_FAMILY_7B = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-7B-Instruct_no_vector/Qwen__Qwen2.5-7B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-34-14.746371.jsonl"
-PATH_CROSS_FAMILY = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Llama-3.1-8B-Instruct_no_vector/meta-llama__Llama-3.1-8B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-25T15-06-51.949587.jsonl"
-PATH_GPT_OLD = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/gpt_rewrites_unified_new/Qwen_Qwen2.5-1.5B-Instruct/rewritten_old.json"
+PATH_QWEN_14B = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-14B-Instruct_no_vector/Qwen__Qwen2.5-14B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-22T16-17-22.512044.jsonl"
+PATH_QWEN_32B = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-32B-Instruct_no_vector/Qwen__Qwen2.5-32B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-25T03-44-06.551722.jsonl"
+PATH_QWEN_72B = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-72B-Instruct_no_vector/Qwen__Qwen2.5-72B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-22T21-14-55.626811.jsonl"
+PATH_QWEN_7B  = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-7B-Instruct_no_vector/Qwen__Qwen2.5-7B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-34-14.746371.jsonl"
+PATH_LLAMA_1B = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Llama-3.2-1B-Instruct_no_vector/meta-llama__Llama-3.2-1B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-44-34.344707.jsonl"
+PATH_LLAMA_3B = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Llama-3.2-3B-Instruct_no_vector/meta-llama__Llama-3.2-3B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-56-55.533987.jsonl"
+PATH_LLAMA_8B = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Llama-3.1-8B-Instruct_no_vector/meta-llama__Llama-3.1-8B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-25T15-06-51.949587.jsonl"
+PATH_LLAMA_70B = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Llama-3.1-70B-Instruct_no_vector/meta-llama__Llama-3.1-70B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-25T07-01-18.149083.jsonl"
+PATH_GPT_REWRITTEN   = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/gpt_rewrites_unified_new/Qwen_Qwen2.5-3B-Instruct/rewritten_old.json"
+PATH_GPT_5_1_PATH     = "/common/users/sl2148/Public/yang_ouyang/projects/lm-evaluation-harness/lm_eval/models/eval_gpt5_gsm8k_20260104_133223/gpt-5.1/samples_gsm8k_cot_zeroshot_2026-01-04T14-13-04.569148.jsonl"
+
 # ==========================================
 # 1. 工具函数：读取数据 (支持 JSONL 和 JSON)
 # ==========================================
 def load_samples(file_path, limit=None, key=None):
     print(f"Loading data from: {os.path.basename(file_path)}...")
     data_dict = {}
-    
-    try:
-        items = []
-        if file_path.endswith('.json'):
-            # 处理标准 JSON 列表
-            with open(file_path, 'r', encoding='utf-8') as f:
-                full_data = json.load(f)
-                # 如果有limit，尽量多读一些以保证能找到交集，这里暂存全部或limit
-                items = full_data if limit is None else full_data[:limit]
-        else:
-            # 处理 JSONL
-            with open(file_path, 'r', encoding='utf-8') as f:
-                for i, line in enumerate(f):
-                    if limit is not None and i >= limit:
-                        break
-                    items.append(json.loads(line))
 
-        for item in items:
-            # 获取 doc_id
-            if 'doc_id' not in item:
-                continue
-            
-            doc_id = item['doc_id']
-            
-            # 获取 Question
-            question = None
-            # Check for doc['question'] (standard in lm_eval output)
-            if "doc" in item and isinstance(item["doc"], dict) and "question" in item["doc"]:
-                question = item["doc"]["question"]
-            # Fallback for other formats
-            elif "question" in item:
-                question = item["question"]
-            
-            if not question:
-                continue
-
-            # 获取 Response
-            text = None
-            
-            if key:
-                # 指定 key
-                if key in item:
-                    text = item[key]
-            else:
-                # 默认逻辑: resps[0][0]
-                if 'resps' in item and len(item['resps']) > 0:
-                    text = item['resps'][0][0]
-            
-            if text:
-                # 拼接 Question 和 Response
-                prompt = qwen_chat_prompt(question)
-                full_text = prompt + text
-                data_dict[doc_id] = (prompt, full_text)
-                    
-    except FileNotFoundError:
+    items = []
+    if not os.path.exists(file_path):
         print(f"Error: File not found at {file_path}")
         return {}
-    
+
+    if file_path.endswith(".json"):
+        with open(file_path, "r", encoding="utf-8") as f:
+            full_data = json.load(f)
+            items = full_data if limit is None else full_data[:limit]
+    else:
+        with open(file_path, "r", encoding="utf-8") as f:
+            for i, line in enumerate(f):
+                if limit is not None and i >= limit:
+                    break
+                items.append(json.loads(line))
+
+    for item in items:
+        if "doc_id" not in item:
+            continue
+        doc_id = item["doc_id"]
+
+        question = None
+        if "doc" in item and isinstance(item["doc"], dict) and "question" in item["doc"]:
+            question = item["doc"]["question"]
+        elif "question" in item:
+            question = item["question"]
+        if not question:
+            continue
+
+        # response text
+        text = None
+        if key:
+            text = item.get(key, None)
+        else:
+            if "resps" in item and len(item["resps"]) > 0 and len(item["resps"][0]) > 0:
+                text = item["resps"][0][0]
+
+        if not text:
+            continue
+
+        prompt = qwen_chat_prompt(question)
+        full_text = prompt + text
+        data_dict[doc_id] = (prompt, full_text)
+
     print(f"Loaded {len(data_dict)} samples.")
     return data_dict
 
@@ -105,30 +95,48 @@ print(f"Loading Observer Model: {MODEL_PATH} on {device}...")
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 model = AutoModelForCausalLM.from_pretrained(
-    MODEL_PATH, 
-    device_map="auto", 
+    MODEL_PATH,
+    device_map="auto",
     torch_dtype=torch.float16
 )
 model.eval()
 
 # ==========================================
-# 3. 准备数据 & 4. 计算 NLL
+# 3. 配置对比组
 # ==========================================
-# 定义所有对比配置
 configs = [
-    {"name": "Same Family (Qwen-72B)", "path": PATH_SAME_FAMILY_72B, "key": None, "color": "#d62728"},
-    {"name": "Same Family (Qwen-32B)", "path": PATH_SAME_FAMILY_32B, "key": None, "color": "#ff7f0e"},
-    {"name": "Same Family (Qwen-14B)", "path": PATH_SAME_FAMILY_14B, "key": None, "color": "#9467bd"},
-    
-    {"name": "Same Family (Qwen-7B)", "path": PATH_SAME_FAMILY_7B, "key": None, "color": "#1f77b4"},
-    {"name": "Cross Family (Llama-8B)", "path": PATH_CROSS_FAMILY, "key": None, "color": "yellow"},
-    {"name": "GPT (Self / Original)", "path": PATH_GPT_OLD, "key": "resp_before", "color": "#17becf"},
-    {"name": "GPT (Old)", "path": PATH_GPT_OLD, "key": "resp_after", "color": "#2ca02c"},
+    {"name": "Same Family (Qwen-72B)", "path": PATH_QWEN_72B, "key": None, "color": "#d62728"},
+    {"name": "Same Family (Qwen-32B)", "path": PATH_QWEN_32B, "key": None, "color": "#ff7f0e"},
+    {"name": "Same Family (Qwen-14B)", "path": PATH_QWEN_14B, "key": None, "color": "#9467bd"},
+    {"name": "Same Family (Qwen-7B)",  "path": PATH_QWEN_7B,  "key": None, "color": "#1f77b4"},
+    {"name": "Cross Family (Llama-8B)","path": PATH_LLAMA_8B,    "key": None, "color": "#bcbd22"},
+    {"name": "Cross Family (Llama-70B)","path": PATH_LLAMA_70B,      "key": None, "color": "#8c564b"},
+    {"name": "Cross Family (GPT-5.1)","path": PATH_GPT_5_1_PATH,   "key": None,  "color": "#e377c2"},
+    {"name": "Self",                   "path": PATH_GPT_REWRITTEN,         "key": "resp_before", "color": "#17becf"},
+    {"name": "Dense-Rewriting","path": PATH_GPT_REWRITTEN,         "key": "resp_after",  "color": "#2ca02c"},
 ]
 
-# 1. 加载所有数据到字典
+# ==========================================
+# 3.1 选择要绘制的曲线（白名单）
+# ==========================================
+SELECT_NAMES = [
+    # "Same Family (Qwen-7B)",
+    "Same Family (Qwen-14B)",
+    # "Same Family (Qwen-32B)",
+    # "Same Family (Qwen-72B)",
+    # "Cross Family (Llama-8B)",
+    # "Cross Family (Llama-70B)",
+    "Dense-Rewriting",
+    "Self",
+    # "Cross Family (GPT-5.1)",
+    # "Rewritten",
+]
+
+configs = [c for c in configs if c["name"] in set(SELECT_NAMES)]
+print("Selected configs:", [c["name"] for c in configs])
+
 print("\n--- Loading Data ---")
-loaded_data = [] # Stores dicts {doc_id: text}
+loaded_data = []
 valid_configs = []
 
 for cfg in configs:
@@ -142,139 +150,281 @@ for cfg in configs:
 if not loaded_data:
     raise ValueError("No data loaded!")
 
-# 2. 找到共同 ID (Intersection of all loaded keys)
+# 共同 doc_id
 common_ids = set(loaded_data[0].keys())
 for d in loaded_data[1:]:
     common_ids &= set(d.keys())
-
 common_ids = sorted(list(common_ids))
-print(f"Found {len(common_ids)} common samples across all {len(loaded_data)} datasets.")
 
+print(f"Found {len(common_ids)} common samples across all {len(loaded_data)} datasets.")
 if not common_ids:
     raise ValueError("No common samples found.")
 
-# 截取
 target_ids = common_ids[:SAMPLE_LIMIT]
 print(f"Using {len(target_ids)} samples for evaluation.")
 
-# 3. 计算 NLL 并存储结果
-def calculate_nll(item_list, model, tokenizer):
-    nlls = []
-    # item_list is a list of tuples: (prompt, full_text)
-    for prompt, full_text in tqdm(item_list, desc="Calculating NLL", leave=False):
-        # 截断过长的文本
-        inputs = tokenizer(full_text, return_tensors="pt", truncation=True, max_length=2048).to(model.device)
-        
-        # 构建 Labels，默认全是 -100
-        labels = inputs["input_ids"].clone()
-        
-        # 计算 prompt 的长度，以便进行 masking
-        # 注意: 这里重新 encode prompt 可能会和 full text 的前缀有些微差异（例如空格处理），
-        # 但通常对于 Chat 模板是准确的。
-        prompt_ids = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048).input_ids
-        prompt_len = prompt_ids.shape[1]
-        
-        # 只要 prompt 长度小于总长度，就进行 mask
-        if prompt_len < labels.shape[1]:
-            labels[:, :prompt_len] = -100
-        else:
-            # 如果 prompt 占满了或者比 full_text 还长（被截断），则 loss 无意义
-            labels[:, :] = -100
-            
-        with torch.no_grad():
-            outputs = model(**inputs, labels=labels)
-            
-        # 如果全部被 mask，loss 可能是 nan，这里处理一下
-        if torch.isnan(outputs.loss) or labels[0][0] == -100 and torch.all(labels == -100):
-            nlls.append(0.0) # 或者 float('inf')
-        else:
-            nlls.append(outputs.loss.item())
-    return nlls
+# ==========================================
+# 4. 计算 NLL（更稳的mask + 丢弃无效样本）
+# ==========================================
+def nll_one(prompt: str, full_text: str, model, tokenizer, max_length: int = 2048):
+    # tokenize full
+    inputs = tokenizer(
+        full_text,
+        return_tensors="pt",
+        truncation=True,
+        max_length=max_length
+    ).to(model.device)
 
-# Define Cache File
-CACHE_FILE = "nll_results_cache_v3_{}.json".format(MODEL_PATH.replace("/", "_"))
+    input_ids = inputs["input_ids"]
+    seq_len = input_ids.shape[1]
+
+    # prompt length: avoid re-adding special tokens to reduce mismatch risk
+    prompt_ids = tokenizer(
+        prompt,
+        return_tensors="pt",
+        add_special_tokens=False,
+        truncation=True,
+        max_length=max_length
+    )["input_ids"]
+    prompt_len = int(prompt_ids.shape[1])
+    prompt_len = min(prompt_len, seq_len)  # clamp
+
+    labels = input_ids.clone()
+    labels[:, :prompt_len] = -100
+
+    # if everything masked -> invalid
+    if torch.all(labels == -100):
+        return None
+
+    with torch.no_grad():
+        outputs = model(**inputs, labels=labels)
+
+    loss = outputs.loss
+    if loss is None or torch.isnan(loss) or torch.isinf(loss):
+        return None
+
+    return float(loss.item())
+
+# cache
+CACHE_FILE = f"nll_results_cache_v5_{MODEL_PATH.replace('/', '_')}.json"
 nll_cache = {}
 if os.path.exists(CACHE_FILE):
     print(f"Loading results cache from {CACHE_FILE}...")
-    with open(CACHE_FILE, 'r') as f:
+    with open(CACHE_FILE, "r") as f:
         nll_cache = json.load(f)
 
-results = []
 print("\n--- Calculating NLL (with caching) ---")
-for i, cfg in enumerate(valid_configs):
-    name = cfg['name']
-    print(f"[{i+1}/{len(valid_configs)}] Processing {name}...")
-    
+
+# 先逐 config 计算 raw nll（可能有 None）
+raw_scores_by_cfg = {}
+invalid_ids_global = set()
+
+for idx_cfg, cfg in enumerate(valid_configs):
+    name = cfg["name"]
+    print(f"[{idx_cfg+1}/{len(valid_configs)}] Processing {name}...")
+
     if name not in nll_cache:
         nll_cache[name] = {}
-        
-    # Identify what needs to be calculated
+
+    # 需要算的 doc
     missing_ids = [doc_id for doc_id in target_ids if str(doc_id) not in nll_cache[name]]
-    
     if missing_ids:
         print(f"  > Calculating missing NLL for {len(missing_ids)} items...")
-        texts_to_run = [loaded_data[i][doc_id] for doc_id in missing_ids]
-        scores = calculate_nll(texts_to_run, model, tokenizer)
-        
-        # Update Cache
-        for doc_id, score in zip(missing_ids, scores):
-            nll_cache[name][str(doc_id)] = score
-        
-        # Save cache immediately
-        with open(CACHE_FILE, 'w') as f:
+        for doc_id in tqdm(missing_ids, desc=f"NLL {name}", leave=False):
+            prompt, full_text = loaded_data[idx_cfg][doc_id]
+            score = nll_one(prompt, full_text, model, tokenizer)
+            # score None 表示无效：暂存为 "__INVALID__"
+            nll_cache[name][str(doc_id)] = "__INVALID__" if score is None else score
+
+        with open(CACHE_FILE, "w") as f:
             json.dump(nll_cache, f)
     else:
         print(f"  > All {len(target_ids)} items found in cache.")
-        
-    # Retrieve aligned scores
-    aligned_scores = [nll_cache[name][str(doc_id)] for doc_id in target_ids]
-    results.append({
-        "config": cfg,
-        "scores": aligned_scores
-    })
 
-# 5. 统计与可视化
+    # 读出 raw 分数，并记录无效 doc_id
+    raw = {}
+    for doc_id in target_ids:
+        v = nll_cache[name].get(str(doc_id), "__INVALID__")
+        if v == "__INVALID__":
+            raw[doc_id] = None
+            invalid_ids_global.add(doc_id)
+        else:
+            raw[doc_id] = float(v)
+    raw_scores_by_cfg[name] = raw
+
+# 同步丢弃：任何 config 无效的 doc_id，都从所有 config 移除，保证对齐公平
+filtered_ids = [doc_id for doc_id in target_ids if doc_id not in invalid_ids_global]
+print(f"\nFiltered invalid samples: {len(target_ids)} -> {len(filtered_ids)} (dropped {len(target_ids)-len(filtered_ids)})")
+
+if len(filtered_ids) == 0:
+    raise ValueError("All samples became invalid after masking/truncation. Increase max_length or check prompts.")
+
+# 组装 results（对齐后的 list）
+results = []
+for cfg in valid_configs:
+    name = cfg["name"]
+    scores = [raw_scores_by_cfg[name][doc_id] for doc_id in filtered_ids]
+    # 这里 scores 不该含 None 了
+    results.append({"config": cfg, "scores": scores})
+
+
+SELF_NAME = "Self"
+
 # ==========================================
-print("\nGenerating visualization...")
-plt.figure(figsize=(12, 8), dpi=150)
-sns.set_style("whitegrid")
+# 5. 可视化（论文风格）
+# ==========================================
+print("\nGenerating visualization (paper-style)...")
 
-# 确定 X 轴范围
-all_scores = [score for r in results for score in r["scores"]]
-if not all_scores:
-    x_min, x_max = 0, 1
-else:
-    x_min, x_max = min(all_scores) - 0.5, max(all_scores) + 0.5
-x = np.linspace(x_min, 1, 1000)
+plt.figure(figsize=(10, 7), dpi=300)
+sns.set_theme(
+    style="whitegrid",
+    context="paper",
+    font_scale=1.2
+)
 
-print(f"\nResults Summary (Observer: Qwen-3B):")
+# 统一 x 轴
+all_scores = [s for r in results for s in r["scores"] if s is not None]
+x_min = min(all_scores) - 0.4
+x_max = max(all_scores) + 0.4
+x = np.linspace(x_min, x_max, 1200)
+
+print(f"\nResults Summary (Observer: {MODEL_PATH}):")
+
+
+# ------------------------------------------
+# Compute Self threshold (mean NLL)
+# ------------------------------------------
+self_mu = None
+for res in results:
+    if res["config"]["name"] == SELF_NAME:
+        self_scores = np.array([s for s in res["scores"] if s is not None])
+        self_mu = float(np.mean(self_scores))
+        print(f"\n[Self baseline] Mean NLL = {self_mu:.4f}")
+        break
+
+assert self_mu is not None, "Self config not found!"
+
 for res in results:
     cfg = res["config"]
-    scores = res["scores"]
-    
-    if not scores:
+
+    # Skip Self distribution (used as threshold only)
+    if cfg["name"] == SELF_NAME:
         continue
-        
+
+    scores = np.array([s for s in res["scores"] if s is not None])
+
+    if len(scores) < 5:
+        print(f"{cfg['name']:<30}: Not enough valid samples ({len(scores)})")
+        continue
+
     mu, std = norm.fit(scores)
-    print(f"{cfg['name']:<25}: Mean NLL = {mu:.4f}, Std = {std:.4f}")
-    
-    # Plot - Histogram (Faint, no label)
-    plt.hist(scores, density=True, bins=30, alpha=0.1, color=cfg['color'])
-    
-    # Plot - Fit Curve (Bold)
-    plt.plot(x, norm.pdf(x, mu, std), color=cfg['color'], linewidth=2.5, 
-             label=f"{cfg['name']}\n$\mu={mu:.3f}, \sigma={std:.3f}$")
+    print(f"{cfg['name']:<30}: Mean NLL = {mu:.4f}, Std = {std:.4f}")
 
-    # Plot - Mean Line (Vertical Dashed)
-    plt.axvline(x=mu, color=cfg['color'], linestyle='--', linewidth=1.5, alpha=0.8)
+    # 1️⃣ 背景直方图（弱化）
+    plt.hist(
+        scores,
+        bins=28,
+        density=True,
+        alpha=0.08,
+        color=cfg["color"],
+        edgecolor="none"
+    )
 
-plt.title("Distribution of Negative Log-Likelihood (NLL) on Model Responses", fontsize=16)
-plt.xlabel("NLL (Lower means more likely/natural to Observer)", fontsize=14)
-plt.ylabel("Probability Density", fontsize=14)
-plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', frameon=True, fontsize=10, borderaxespad=0.)
-plt.grid(True, linestyle='--', alpha=0.5)
+    # 2️⃣ 高斯拟合曲线（主视觉）
+    pdf = norm.pdf(x, mu, std)
+    plt.plot(
+        x, pdf,
+        color=cfg["color"],
+        linewidth=2.8,
+        label=cfg["name"]
+    )
+
+    # 3️⃣ 均值中轴线
+    plt.axvline(
+        mu,
+        color=cfg["color"],
+        linestyle="--",
+        linewidth=1.6,
+        alpha=0.9
+    )
+
+    # 4️⃣ 在“中轴线”上直接标 μ
+    y_mu = norm.pdf(mu, mu, std)
+    plt.text(
+        mu,
+        y_mu * 1.03,   # 稍微抬高，避免压线
+        f"$\\mu={mu:.2f}$",
+        color=cfg["color"],
+        fontsize=20,
+        ha="center",
+        va="bottom",
+        rotation=90,
+        bbox=dict(
+            facecolor="white",
+            edgecolor="none",
+            alpha=0.75,
+            pad=1.5
+        )
+    )
+
+
+# ------------------------------------------
+# Draw Self threshold line
+# ------------------------------------------
+
+
+y_top = plt.ylim()[1]
+
+plt.axvline(
+    self_mu,
+    color="black",
+    linestyle=":",
+    linewidth=2.8,
+    alpha=0.95,
+    # label="Self baseline"
+)
+x_shift = -0.15
+
+plt.text(
+    self_mu + x_shift,
+    y_top * 0.93,
+    f"Self Baseline\n$\\mu={self_mu:.2f}$",
+    ha="center",
+    va="top",
+    fontsize=20,
+    color="black",
+    bbox=dict(
+        facecolor="white",
+        edgecolor="black",
+        alpha=0.85,
+        pad=2
+    )
+)
+
+
+
+# 坐标轴与整体样式
+plt.xlabel("Negative Log-Likelihood (NLL)", fontsize=20, labelpad=8)
+plt.ylabel("Probability Density", fontsize=20, labelpad=8)
+
+plt.xticks(fontsize=14)
+plt.yticks(fontsize=14)
+plt.margins(x=0.02)
+plt.xlim(x_min, x_max)
+
+plt.legend(
+    loc="upper right",      # 图内右上角
+    frameon=True,
+    fontsize=15,
+    # title_fontsize=,
+    borderpad=0.8,
+    labelspacing=0.6
+)
+
+
+plt.grid(True, linestyle="--", alpha=0.4)
 plt.tight_layout()
 
-save_path = f"distribution_alignment_{MODEL_PATH.replace('/', '_')}_all_variants.png"
-plt.savefig(save_path)
+save_path = f"distribution_alignment_{MODEL_PATH.replace('/', '_')}_paper.png"
+plt.savefig(save_path, bbox_inches="tight")
 print(f"\nVisualization saved to: {save_path}")

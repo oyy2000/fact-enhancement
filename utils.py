@@ -97,7 +97,10 @@ from transformers import AutoTokenizer
 MODEL_MAP = {
     "Qwen2.5-1.5B-Instruct": "Qwen/Qwen2.5-1.5B-Instruct",
     "Qwen2.5-3B-Instruct": "Qwen/Qwen2.5-3B-Instruct",
-    # "Qwen2.5-32B-Instruct": "Qwen/Qwen2.5-32B-Instruct",
+    "Llama-3.2-3B-Instruct": "meta-llama/Llama-3.2-3B-Instruct",
+    "Llama-3.2-1B-Instruct": "meta-llama/Llama-3.2-1B-Instruct",
+    "Llama-3.1-8B-Instruct": "meta-llama/Llama-3.1-8B-Instruct",
+    "Qwen2.5-32B-Instruct": "Qwen/Qwen2.5-32B-Instruct",
 }
 
 def get_model_path(folder_model_name):

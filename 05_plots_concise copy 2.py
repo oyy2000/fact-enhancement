@@ -7,52 +7,7 @@ from transformers import AutoTokenizer
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import numpy as np
-import pickle
 
-
-FONT_SIZE = 20
-
-def apply_plot_style(ax, *, fontsize=FONT_SIZE, title=None, legend=True, legend_loc="best"):
-    """
-    - 不要标题: title=None 或 title=""
-    - 全部文字 fontsize
-    - legend 放在图内: loc='best' / 'upper right' 等
-    """
-    # 标题
-    if title is None:
-        ax.set_title("")           # 强制空标题
-    else:
-        ax.set_title(title, fontsize=fontsize)
-
-    # 坐标轴 label
-    ax.xaxis.label.set_size(fontsize)
-    ax.yaxis.label.set_size(fontsize)
-
-    # 刻度文字
-    ax.tick_params(axis="both", labelsize=fontsize)
-
-    # 网格（可选）
-    ax.grid(alpha=0.3)
-
-    # legend（图内）
-    if legend:
-        leg = ax.legend(
-            loc=legend_loc,
-            fontsize=fontsize,
-            frameon=True,   # 内部legend一般开边框更清楚
-        )
-        # 如果不想挡住线，可以稍微透明一点
-        if leg is not None:
-            leg.get_frame().set_alpha(0.85)
-
-plt.rcParams.update({
-    "font.size": FONT_SIZE,
-    "axes.titlesize": FONT_SIZE,
-    "axes.labelsize": FONT_SIZE,
-    "xtick.labelsize": FONT_SIZE,
-    "ytick.labelsize": FONT_SIZE,
-    "legend.fontsize": FONT_SIZE,
-})
 # ============================================================
 # CONFIG
 # ============================================================
@@ -80,9 +35,6 @@ os.makedirs(SAVE_ROOT, exist_ok=True)
 os.makedirs(f"{SAVE_ROOT}/correct_wrong", exist_ok=True)
 os.makedirs(f"{SAVE_ROOT}/scatter", exist_ok=True)
 os.makedirs(f"{SAVE_ROOT}/special", exist_ok=True)
-PLOT_CACHE_DIR = f"{SAVE_ROOT}/plot_cache"
-os.makedirs(PLOT_CACHE_DIR, exist_ok=True)
-
 
 MODEL_MARKERS = ["o", "s", "^", "D", "P", "X", "<", ">", "v"]
 WRONG_MARKERS = ["x", "X", "v", "p", "*", "d", "h", "H", "+"]
@@ -137,7 +89,6 @@ def compute_corr(x, y):
         return pearsonr(x, y)[0]
     except:
         return None
-
 
 def extract_metrics(entry, thr, model_name=None):
     step_scores = entry["step_scores"]          # List[List[float]]
@@ -197,33 +148,6 @@ def extract_metrics(entry, thr, model_name=None):
     }
 
 
-def build_plot_all_cache(threshold=THRESHOLD):
-    """
-    Build and save all-sample plot cache.
-    """
-    cache = {}
-
-    for model_name, model_data in model_results.items():
-        cache[model_name] = {}
-
-        for L in detect_layers(model_data):
-            cache[model_name][L] = {}
-
-            for lam, entry in model_data[L].items():
-                M = extract_metrics(entry, threshold, model_name)
-
-                cache[model_name][L][lam] = {
-                    "lam_val": lam_to_float(lam),
-                    "acc": float(np.mean(M["Y"])),
-                    "ppl": float(np.nanmean(M["ppl"])),
-                }
-
-    out_path = f"{PLOT_CACHE_DIR}/plot_all_cache.pkl"
-    with open(out_path, "wb") as f:
-        pickle.dump(cache, f)
-
-    print("Saved plot_all cache →", out_path)
-
 # ============================================================
 # Load All Models (each JSON may contain multiple models)
 # ============================================================
@@ -274,18 +198,18 @@ def main():
     setup_plotting(data, SAVE_DIR)
 
     print("\n=== Generating Correct-vs-Wrong plots ===")
-    # plot_correct_wrong()
+    plot_correct_wrong()
 
-    # print("\n=== Generating All-sample plots ===")
-    # plot_all()
+    print("\n=== Generating All-sample plots ===")
+    plot_all()
 
-    # plot_avg_score_vs_acc()
-    # plot_avg_tokens_vs_acc()
-    # plot_avg_total_tokens_vs_acc()
+    plot_avg_score_vs_acc()
+    plot_avg_tokens_vs_acc()
+    plot_avg_total_tokens_vs_acc()
 
-    # plot_per_step_avg_correctness(max_steps=15)
+    plot_per_step_avg_correctness(max_steps=15)
 
-    # plot_split_strategy_impact()
+    plot_split_strategy_impact()
 
 if __name__ == "__main__":
     main()
@@ -384,48 +308,66 @@ if __name__ == "__main__":
         plt.close()
         print("Saved:", out_path)
 
+
+# ============================================================
+#  D. All-samples plots (no Correct/Wrong split)
+# ============================================================
 def plot_all():
     metrics = {
-        "acc": "Accuracy",
-        "nll": "Negative Log-Likelihood (ln)",
+        "prefix": "Avg Prefix Length",
+        "first_error": "Avg First Error Step",
+        "avg_scores": "Avg Step Correctness",
+        "avg_steps": "Avg Total Steps",
+        "avg_tokens_per_step": "Avg Tokens per Step",
+        "avg_total_tokens": "Avg Total Tokens",
+        "acc": "Accuracy",   # ⭐ 新增
+        "total_error_steps": "Total Error Steps",
+        "error_step_ratio": "Error Step Ratio",
+        "ppl": "Perplexity",
+        "rank_shift": "Rank Shift"
     }
 
     outdir = f"{SAVE_ROOT}/all"
     os.makedirs(outdir, exist_ok=True)
 
     for metric_key, metric_name in metrics.items():
-        plt.figure(figsize=(10, 8))
+        plt.figure(figsize=(10,6))
         ax = plt.gca()
+        ax_acc = ax.twinx()   # ⭐ 右轴：accuracy
 
         for model_name, model_data in model_results.items():
             layers = detect_layers(model_data)
-            alpha_map = {L: LAYER_ALPHA[i % len(LAYER_ALPHA)] for i, L in enumerate(layers)}
+            alpha_map = {
+                L: LAYER_ALPHA[i % len(LAYER_ALPHA)]
+                for i, L in enumerate(layers)
+            }
 
             for L in layers:
                 lambdas = detect_lambdas(model_data, L)
-                lam_vals, mean_vals = [], []
+                lam_vals = []
+                mean_vals = []
 
                 for lam in lambdas:
                     entry = model_data[L][lam]
                     M = extract_metrics(entry, THRESHOLD, model_name)
+                    Y = M["Y"]        # 0/1 correctness
+                    acc = np.mean(Y) # ⭐ 这就是 accuracy
 
                     lam_num = lam_to_float(lam)
-
                     if metric_key == "acc":
-                        mean_val = np.mean(M["Y"])
-                    elif metric_key == "nll":
-                        ppl = M["ppl"]
-                        # ppl = ppl[np.isfinite(ppl) & (ppl > 0)]
-                        mean_val = np.mean(ppl) if len(ppl) > 0 else np.nan
+                        mean_val = np.mean(M["Y"])      # ⭐ accuracy
+                    else:
+                        mean_val = np.mean(M[metric_key])
 
                     lam_vals.append(lam_num)
                     mean_vals.append(mean_val)
 
+                # sort by λ
                 idx = np.argsort(lam_vals)
                 lam_vals = np.array(lam_vals)[idx]
                 mean_vals = np.array(mean_vals)[idx]
 
-                ax.plot(
+                plt.plot(
                     lam_vals,
                     mean_vals,
                     color=MODEL_COLOR_MAP[model_name],
@@ -436,19 +378,30 @@ def plot_all():
                     label=f"{model_name}-{L}"
                 )
 
-        ax.set_xlabel("λ")
-        ax.set_ylabel(metric_name)
+        plt.title(f"All Samples — {metric_name}")
+        plt.xlabel("λ")
+        plt.ylabel(metric_name)
+        plt.grid(alpha=0.3)
 
-        handles, labels = ax.get_legend_handles_labels()
+        # dedupe legend
+        handles, labels = plt.gca().get_legend_handles_labels()
         uniq = dict(zip(labels, handles))
-        ax.legend(uniq.values(), uniq.keys(), loc="best", fontsize=FONT_SIZE, frameon=True)
+        plt.legend(
+            uniq.values(),
+            uniq.keys(),
+            bbox_to_anchor=(1.05,1),
+            loc="upper left"
+        )
 
-        apply_plot_style(ax, fontsize=FONT_SIZE, title=None, legend=False)
+        # if metric_key == "acc":
+            # plt.ylim(0, 1.05)
 
         plt.tight_layout()
-        plt.savefig(f"{outdir}/{metric_key}.png", dpi=400)
+        out_path = f"{outdir}/{metric_key}.png"
+        plt.savefig(out_path, dpi=300)
         plt.close()
-        print("Saved:", f"{outdir}/{metric_key}.png")
+        print("Saved:", out_path)
+
 
 def lam_to_size(lam, base=80, scale=40):
     return base + scale * abs(lam)

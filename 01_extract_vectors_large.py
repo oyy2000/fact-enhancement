@@ -13,12 +13,16 @@ from steering_vectors import train_steering_vector, SteeringVector
 # ===== CONFIG ========
 # =====================
 EXPERIMENT_MODE = "GPT_REWRITE" 
-TARGET_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
+TARGET_MODEL = "meta-llama/Llama-3.2-1B-Instruct"
+REWRITE_MODEL = "meta-llama/Llama-3.2-1B-Instruct" # "Qwen/Qwen2.5-7B-Instruct" # 仅在此模式下生效
+
 # 层索引配置 (3B range 37)
 model_name_to_layer_index = {
     # "Qwen/Qwen2.5-3B-Instruct": [i for i in range(37)],
-    "Qwen/Qwen2.5-1.5B-Instruct": [i for i in range(29)],
+    # "Qwen/Qwen2.5-1.5B-Instruct": [i for i in range(29)],
     # "Qwen/Qwen2.5-0.5B-Instruct": [i for i in range(25)],
+    "meta-llama/Llama-3.2-1B-Instruct": [i for i in range(17)],
+    # "meta-llama/Llama-3.2-3B-Instruct": [i for i in range(29)],
 }
 
 # 通用配置
@@ -40,8 +44,7 @@ if EXPERIMENT_MODE == "GPT_REWRITE":
 
 elif EXPERIMENT_MODE == "LARGE_MODEL":
     # === 逻辑 2: Large Model Rewrites (Qwen 0.5B) ===
-    DIR_PATH = "./large_model_rewrites_unified"
-    REWRITE_MODEL = "Qwen/Qwen2.5-14B-Instruct" # 仅在此模式下生效
+    DIR_PATH = "./large_model_rewrites_unified_new"
     
     # 构造路径
     REWRITEEN_SAMPLE_PATH = os.path.join(DIR_PATH, TARGET_MODEL.replace("/", "_"))

@@ -16,29 +16,31 @@ import json
 # 1. 核心控制开关
 # ==========================================
 # 选项: "GPT_REWRITE" (3B实验) 或 "LARGE_MODEL" (0.5B实验)
-EXPERIMENT_MODE = "GPT_REWRITE" 
+EXPERIMENT_MODE = "LARGE_MODEL" 
 
 # ==========================================
 # 2. 公共配置 (两个实验共用)
 # ==========================================
-GPUS = [0, 1, 2, 3, 4, 5, 6, 7]
+GPUS = [0, 1, 2, 3, 4, 5, 6, 7]  # 使用的 GPU 列表
 TASKS = "gsm8k_cot_zeroshot_unified" 
 GEN_KWARGS = "max_gen_toks=2048,temperature=0,do_sample=False"
 MODEL = "steer_hf"
 NUM_FEWSHOT = "0"
 APPLY_CHAT_TEMPLATE = True
-LIMIT = 128
-BATCH_SIZE = "128"
-APPLIED_MODEL = "Qwen/Qwen2.5-3B-Instruct" 
-REWRITE_MODEL = "Qwen/Qwen2.5-3B-Instruct"
+LIMIT = 1000
+BATCH_SIZE = "16"
+APPLIED_MODEL = "meta-llama/Llama-3.2-1B-Instruct" #"meta-llama/Llama-3.2-3B-Instruct" # "Qwen/Qwen2.5-1.5B-Instruct" 
+REWRITE_MODEL = "meta-llama/Llama-3.1-8B-Instruct" #"meta-llama/Llama-3.1-8B-Instruct" Qwen/Qwen2.5-3B-Instructt
 
 
-STEP = 1
-STEER_LAMBDAS = [i * STEP for i in range(-10, 11)]  # -1.0..1.0
+STEP = 0.1
+# STEER_LAMBDAS = [i * STEP for i in range(-5, )]  # -1.0..1.0
+STEER_LAMBDAS = [1, -1]  # -1.0..1.0
+
 # 或者保留两位，保证打印一致
 STEER_LAMBDAS = [round(x, 2) for x in STEER_LAMBDAS]
 
-applied_sanitized = APPLIED_MODEL.replace("/", "_") + "_applied"
+applied_sanitized = APPLIED_MODEL.replace("/", "_")
 rewrite_sanitized = REWRITE_MODEL.replace("/", "_")
 
 # ==========================================
@@ -52,28 +54,26 @@ if EXPERIMENT_MODE == "GPT_REWRITE":
         REWRITE_PATH,
         rewrite_sanitized, 
         f"vectors_50_{PROMPT_STYLE}", 
-        applied_sanitized
+        applied_sanitized + "_applied"
         )
 
     # 输出后缀 & 运行参数
-    outdir_suffix = "_all_layers"
+    outdir_suffix = "_selected_layers_3"
 
 
 elif EXPERIMENT_MODE == "LARGE_MODEL":
-    REWRITE_PATH = "./large_model_rewrites_unified/"
+    REWRITE_PATH = "./large_model_rewrites_unified_new/"
     VECTOR_DIR = os.path.join(
         REWRITE_PATH, 
         applied_sanitized, 
         f"vectors_50_paired_{rewrite_sanitized}", 
-        applied_sanitized  
+        applied_sanitized  + "_applied"
     )
     # 输出后缀 & 运行参数
-    outdir_suffix = "_all_layers"
+    outdir_suffix = "_selected_layers"
 
 else:
     raise ValueError(f"Unknown EXPERIMENT_MODE: {EXPERIMENT_MODE}")
-
-
 
     
 # ==========================================
@@ -92,44 +92,31 @@ print(f"Batch Size:  {BATCH_SIZE}, Limit: {LIMIT}")
 
 PRETRAINEDS = [
     # "meta-llama/Llama-3.1-8B-Instruct",
-    # "meta-llama/Llama-3.2-1B-Instruct",
+    "meta-llama/Llama-3.2-1B-Instruct",
     # "meta-llama/Llama-3.2-3B-Instruct",
     # "mistralai/Mistral-7B-Instruct-v0.3",
     # "Qwen/Qwen2.5-0.5B-Instruct",
     # "Qwen/Qwen2.5-1.5B-Instruct",
-    "Qwen/Qwen2.5-3B-Instruct",
+    # "Qwen/Qwen2.5-3B-Instruct",
     # "Qwen/Qwen2.5-7B-Instruct",
     # "Qwen/Qwen2.5-14B-Instruct",
 ]
-all_layers = [1] #[4,8,12,16,18,24,30,32,36]
 MODEL_TO_LAYERS = {
     # "Qwen/Qwen2.5-14B-Instruct": [15, 23, 31],# 
     # "Qwen/Qwen2.5-7B-Instruct": [13, 23, 27],
-    # "Qwen/Qwen2.5-1.5B-Instruct": [0, 2, 4, 6, 8,10,12,14,16,18,20,22,24,26,28],
+    # "Qwen/Qwen2.5-1.5B-Instruct": [2,3,4] #[i for i in range(29)],
     # "Qwen/Qwen2.5-0.5B-Instruct": [11, 19, 23],
-    # "Qwen/Qwen2.5-3B-Instruct":   [9, 23, 26, 35],
-    "Qwen/Qwen2.5-3B-Instruct":   [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36],
-    # "Qwen/Qwen2.5-3B-Instruct":   [8, 10, 24],
-    # "meta-llama/Llama-3.2-1B-Instruct": [8], #[8,12,16]
-    # "meta-llama/Llama-3.2-3B-Instruct": [8], #[16,24,32]
+    # "Qwen/Qwen2.5-3B-Instruct":   [18, 10, 9, 6],
+    # "Qwen/Qwen2.5-3B-Instruct":   [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36],
+    # "Qwen/Qwen2.5-3B-Instruct":   [6, 16, 17],
+    "meta-llama/Llama-3.2-1B-Instruct": [13,14,8] # [i for i in range(17)], # [4, 8,12,16] 
+    # "meta-llama/Llama-3.2-3B-Instruct": [6, 16, 20, 22, 23, 24, 25], #[i for i in range(28)], #[16,24,32]
     # "meta-llama/Llama-3.1-8B-Instruct": [8],#[16,24,32]
     # "meta-llama/Llama-3.2-11B-Vision": [8]
 }
 
-# MODEL_TO_LAYERS = {
-#     "Qwen/Qwen2.5-14B-Instruct": all_layers,# 
-#     "Qwen/Qwen2.5-7B-Instruct": all_layers,
-#     "Qwen/Qwen2.5-1.5B-Instruct": all_layers,
-#     "Qwen/Qwen2.5-0.5B-Instruct": all_layers,
-#     "Qwen/Qwen2.5-3B-Instruct":   all_layers,
-#     "meta-llama/Llama-3.2-1B-Instruct": all_layers,
-#     "meta-llama/Llama-3.2-3B-Instruct": all_layers,
-#     "meta-llama/Llama-3.1-8B-Instruct": all_layers,
-# }
-
-
 # 每个新 job 至少需要的空闲显存（MB）。可以视自己的模型大小调。
-MIN_FREE_MEM_MB_PER_JOB = 10000  # 例如 20GB
+MIN_FREE_MEM_MB_PER_JOB = 20000  # 例如 20GB
 # 每块 GPU 上最多允许同时跑几个进程
 MAX_PROCS_PER_GPU = 1
 

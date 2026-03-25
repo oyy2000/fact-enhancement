@@ -15,6 +15,7 @@ model_name_to_layer_index = {
     "Qwen/Qwen2.5-0.5B-Instruct": [12, 20, 24],
     "Qwen/Qwen2.5-3B-Instruct": [18, 32, 36],
 }
+
 MAX_EXAMPLES = 50
 
 root_out_dir = Path(f"./vectors_Qwen14b_big_minus_small_selected_sample_{MAX_EXAMPLES}")

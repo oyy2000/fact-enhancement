@@ -1,8 +1,38 @@
+# Python
 __pycache__/
-results_chunk*.json
-prm_out/results_merged.json
+*.pyc
+
+# Experiment results & data (large, generated)
+exps/
+calibration_ablation/
+control_experiments/
+new_exps/
+
+# Generated artifacts & rewrites
+artifacts/
+out/
+figures/
+gpt_rewrites/
+gpt_rewrites_unified/
+gpt_rewrites_unified_new/
+large_model_rewrites_unified*/
+
+# Generated plots & results
 plots*/
 plots_final_v2*/
 prm_out*/
 vectors*/
 no_vector/*/
+results_chunk*.json
+rebuttal_compiled_results.json
+
+# Generated images & tensors
+*.pt
+*.png
+
+# IDE / tools
+.specstory/
+.cursorignore
+
+# HuggingFace cache
+.cache/

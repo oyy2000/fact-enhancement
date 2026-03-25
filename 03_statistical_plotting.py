@@ -11,15 +11,14 @@ from utils import scan_and_process
 
 STATUS = "gpt_rewrite" # or "large_model_rewrite"
 
-
 PROMPT_STYLE = "old" # or "old" 
-TASKS = "gsm8k_cot_zeroshot_unified_all_layers"
-REWRITE_MODEL = "Qwen/Qwen2.5-3B-Instruct".replace("/", "_")
-TARGET_MODEL = "Qwen/Qwen2.5-3B-Instruct".replace("/", "_")
+TASKS = "gsm8k_cot_zeroshot_unified_selected_layers"
 
-# 默认路径 (您可以根据需要修改)
+REWRITE_MODEL = "Qwen/Qwen2.5-3B-Instruct".replace("/", "_") # "meta-llama/Llama-3.1-3B-Instruct".replace("/", "_") #"Qwen/Qwen2.5-7B-Instruct".replace("/", "_")
+TARGET_MODEL = "Qwen/Qwen2.5-3B-Instruct".replace("/", "_") #"meta-llama/Llama-3.2-3B-Instruct".replace("/", "_") #"Qwen/Qwen2.5-3B-Instruct".replace("/", "_")
+
 if STATUS == "large_model_rewrite":
-    FOLDER_NAME = "large_model_rewrites_unified"
+    FOLDER_NAME = "large_model_rewrites_unified_new"
     VECTOR_PATH = f"vectors_50_paired_{REWRITE_MODEL}"
 elif STATUS == "gpt_rewrite":
     FOLDER_NAME = "gpt_rewrites_unified_new"
@@ -52,6 +51,23 @@ def lam_to_float(lam):
         return float(s)
     except:
         return -1.0
+
+def robust_ylim(values, low=5, high=95, margin=0.1):
+    """
+    values: list or np.array
+    low/high: percentile
+    margin: extra headroom ratio
+    """
+    if len(values) == 0:
+        return None
+
+    lo = np.percentile(values, low)
+    hi = np.percentile(values, high)
+    pad = (hi - lo) * margin if hi > lo else 1e-6
+    return lo - pad, hi + pad
+
+
+all_y_vals = []
 
 def plot_results(results, save_dir, filename_prefix="plot_"):
     """读取 Aggregated Results 并画图"""
@@ -111,7 +127,10 @@ def plot_results(results, save_dir, filename_prefix="plot_"):
                             vals_arr = np.array(stats.get(f"total_tokens_{strategy}", []))
                         else:
                             vals_arr = np.zeros_like(Y_arr)
-                            
+                        
+                        if len(vals_arr) > 0:
+                            all_y_vals.extend(vals_arr.tolist())
+
                         if len(vals_arr) != len(Y_arr):
                             min_len = min(len(vals_arr), len(Y_arr))
                             vals_arr = vals_arr[:min_len]
@@ -165,6 +184,9 @@ def plot_results(results, save_dir, filename_prefix="plot_"):
                             ax_split.plot(sx, sy, marker='x', linestyle=':', color=current_color, alpha=0.7, label=f"{base_label} (Wrong)")
                             has_data_split = True
 
+            # ylim = robust_ylim(np.array(all_y_vals), low=5, high=95)
+            # if ylim is not None:
+            #     ax_all.set_ylim(*ylim)
             # Save "All" Plot
             if has_data_all:
                 cfg = PLOT_CONFIG.get(metric, {})
@@ -198,33 +220,40 @@ def plot_results(results, save_dir, filename_prefix="plot_"):
                 print(f"Saved plot: {out_path}")
                 plt.close(fig_split)
 
-def get_top_k_layers(results, k=10):
+def get_top_k_layers(results, k=5):
     """Find the top K layers based on peak accuracy across all lambdas"""
     layer_scores = []
-    
+
     for model_key, layers_data in results.items():
         for layer, lams_data in layers_data.items():
-            # Find max accuracy for this layer
-            accuracies = []
+
+            best_acc = -1
+            best_lam = None
+
             for lam, stats in lams_data.items():
-                 Y_arr = stats.get("Y", [])
-                 if Y_arr:
-                     accuracies.append(np.mean(Y_arr))
-            
-            peak_acc = max(accuracies) if accuracies else -1
-            layer_scores.append( (peak_acc, model_key, layer) )
-            
-    # Sort descending
+                Y_arr = stats.get("Y", [])
+                if not Y_arr:
+                    continue
+
+                acc = np.mean(Y_arr)
+                if acc > best_acc:
+                    best_acc = acc
+                    best_lam = lam
+
+            # record only once per (model, layer)
+            layer_scores.append((best_acc, model_key, layer, best_lam))
+
+    # Sort descending by accuracy
     layer_scores.sort(key=lambda x: x[0], reverse=True)
-    
-    # Take top K unique layers (model+layer key)
+
+    # Take top K
     top_layers = layer_scores[:k]
-    
+
     print(f"Top {k} Layers by Peak Accuracy:")
-    for score, m, l in top_layers:
-        print(f"  {m} - {l}: {score:.4f}")
-        
-    return set((m, l) for _, m, l in top_layers)
+    for score, m, l, lam in top_layers:
+        print(f"  {m} - {l} (lam={lam}): {score:.4f}")
+
+    return set((m, l) for _, m, l, _ in top_layers)
 
 def filter_results_by_layers(results, target_layers):
     """Return a new results dict containing only specified layers"""
@@ -265,8 +294,16 @@ if __name__ == "__main__":
         with open(json_path, "w") as f:
             json.dump(all_results, f, indent=2)
             
-        # 3. Top 10 Analysis (Only plot top 10)
-        print(f"\n=== Step 3: Top 10 Layers Analysis ===")
+        # 3. Top 5 Analysis (Only plot top 5)
+        print(f"\n=== Step 3: Top 5 Layers Analysis ===")
+        top_layers_set = get_top_k_layers(all_results, k=5)
+        top5_results = filter_results_by_layers(all_results, top_layers_set)
+        
+        if top5_results:
+            top5_dir = os.path.join(args.out_dir, "top5_layers")
+            print(f"Generating Top 5 plots in {top5_dir} ...")
+            plot_results(top5_results, top5_dir, filename_prefix="top5_")
+        
         top_layers_set = get_top_k_layers(all_results, k=10)
         top10_results = filter_results_by_layers(all_results, top_layers_set)
         
@@ -274,7 +311,6 @@ if __name__ == "__main__":
             top10_dir = os.path.join(args.out_dir, "top10_layers")
             print(f"Generating Top 10 plots in {top10_dir} ...")
             plot_results(top10_results, top10_dir, filename_prefix="top10_")
-            
         print("\nAll Done! 🎉")
     else:
         print("No data found or processed.")

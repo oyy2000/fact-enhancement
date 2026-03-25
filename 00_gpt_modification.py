@@ -31,9 +31,42 @@ from openai import OpenAI  # pip install openai
 # Defaults
 # -----------------------------
 REWRITE_FOLDER = "gpt_rewrites_unified_new"
-MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct".replace("/", "_")
-IN_JSONL= "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-1.5B-Instruct_no_vector/Qwen__Qwen2.5-1.5B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-29-34.069734.jsonl"
-# Qwen2.5_3B_PATH IN_JSONL = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-3B-Instruct_no_vector/Qwen__Qwen2.5-3B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-33-55.190404.jsonl"
+# MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct".replace("/", "_")
+MODEL_NAME = "meta-llama/Llama-3.2-1B-Instruct".replace("/", "_")
+# "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-1.5B-Instruct_no_vector/Qwen__Qwen2.5-1.5B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-29-34.069734.jsonl"
+QWEN2_5_3B_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Qwen2.5-3B-Instruct_no_vector/Qwen__Qwen2.5-3B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-33-55.190404.jsonl"
+LLAMA3_2_3B_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Llama-3.2-3B-Instruct_no_vector/meta-llama__Llama-3.2-3B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-56-55.533987.jsonl"
+LLAMA3_2_1B_PATH = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/no_vector/gsm8k_cot_zeroshot_unified/Llama-3.2-1B-Instruct_no_vector/meta-llama__Llama-3.2-1B-Instruct/samples_gsm8k_cot_zeroshot_unified_2026-01-21T11-44-34.344707.jsonl"
+
+IN_JSONL= LLAMA3_2_1B_PATH
+def build_prompt_reflow(question: str, original_resp: str) -> str:
+    return f"""You will lightly rewrite the solution by CONSERVATIVELY merging steps by removing single newline characters (`\n`) as much as possible, while keeping the SAME style and meaning.
+
+What to change:
+- Detect single newline characters (`\n`) that interrupt a continuous sentence, mathematical reasoning, or logical flow.
+- Replace such single newlines with a space, OR minimally rephrase to smoothly merge the lines if required for grammatical correctness.
+
+What to preserve:
+- Keep double newlines (`\n\n`) or any formatting that clearly separates paragraphs, steps, or list items.
+- Preserve the original reasoning structure, order of steps, and writing style.
+
+Hard constraints:
+- Do NOT change any numbers, equations, calculations, or final answers.
+- Do NOT add new reasoning or remove existing reasoning.
+- Ensure the merged text is grammatically correct and semantically identical to the original.
+
+Output format:
+- Output plain text only.
+- Output ONLY the rewritten solution, with no explanations, comments, or extra text.
+
+Question:
+{question}
+
+Original solution:
+{original_resp}
+
+Rewritten solution:
+"""
 
 
 def build_prompt_concise(question: str, original_resp: str) -> str:
@@ -189,6 +222,7 @@ PROMPT_STRATEGIES = {
     # "expert_leap": build_prompt_expert_leap,
     # "symbolic": build_prompt_symbolic,
     # "no_meta": build_prompt_no_meta,
+    "reflow": build_prompt_reflow,
     "concise": build_prompt_concise,
     "old": build_prompt_old,
     "explicit_reference": build_prompt_explicit_reference,
