@@ -1,12 +1,23 @@
 # Python
 __pycache__/
 *.pyc
+.ipynb_checkpoints/
+
+# Local environments & secrets
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
 
 # Experiment results & data (large, generated)
 exps/
 calibration_ablation/
 control_experiments/
 new_exps/
+llama1b_sweep/
+math_eval_data/
 
 # Generated artifacts & rewrites
 artifacts/
@@ -25,14 +36,52 @@ vectors*/
 no_vector/*/
 results_chunk*.json
 rebuttal_compiled_results.json
+camera_ready/
+documents/control_ppl_cache/
+documents/joint_metrics_cache/
+documents/*_cache/
+documents/**/cache/
 
 # Generated images & tensors
 *.pt
 *.png
+*.npy
+*.npz
+*.pkl
+*.ckpt
+*.safetensors
+*.bin
 
 # IDE / tools
 .specstory/
+.cursor/
+.vscode/
 .cursorignore
+.cursorindexingignore
+.DS_Store
+
+# Logs & run trackers
+logs/
+*.log
+*.out
+*.err
+wandb/
+mlruns/
+runs/
 
 # HuggingFace cache
 .cache/
+
+# Nested/external repos and generated SEAL outputs
+SEAL/.git/
+SEAL/results/
+SEAL/lm_eval_rescore/
+SEAL/data/
+SEAL/**/*.log
+steering-reasoning/
+lm-evaluation-harness/
+
+# Public release allowlist
+!public_release/
+!public_release/**/
+!public_release/vectors/**/*.pt

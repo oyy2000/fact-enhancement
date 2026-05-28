@@ -1,0 +1,34 @@
+Mode:       GPT_REWRITE
+Vec base:   /common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/calibration_ablation/Qwen_Qwen2.5-3B-Instruct/GPT_REWRITE
+Pilot eval: /common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/calibration_ablation/Qwen_Qwen2.5-3B-Instruct/GPT_REWRITE/eval
+Formal out: /common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/calibration_ablation/Qwen_Qwen2.5-3B-Instruct/GPT_REWRITE/eval_formal_L6_limit1000
+Status:     /common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/calibration_ablation/Qwen_Qwen2.5-3B-Instruct/GPT_REWRITE/formal_L6_limit1000_status.json
+Layer:      6  limit: 1000  batch_size: 16
+
+Chosen lambdas (pilot EM on L6):
+  N=  1  lambda=  -3.5  pilot_EM=0.8400
+  N=  5  lambda=  -4.5  pilot_EM=0.8300
+  N= 10  lambda=  -1.0  pilot_EM=0.8300
+  N= 25  lambda=   5.0  pilot_EM=0.8500
+  N= 50  lambda=   5.0  pilot_EM=0.8400
+  N=100  lambda=  -1.5  pilot_EM=0.8300
+  N=200  lambda=   3.5  pilot_EM=0.8300
+
+[INFO] Queued 7 formal jobs.
+[LAUNCH] GPU 0 -> Qwen2.5-3B-Instruct_formal1000_N1_L6_lamn3p5
+[LAUNCH] GPU 1 -> Qwen2.5-3B-Instruct_formal1000_N5_L6_lamn4p5
+[LAUNCH] GPU 2 -> Qwen2.5-3B-Instruct_formal1000_N10_L6_lamn1p0
+[LAUNCH] GPU 3 -> Qwen2.5-3B-Instruct_formal1000_N25_L6_lam5p0
+[DONE] GPU 3: Qwen2.5-3B-Instruct_formal1000_N25_L6_lam5p0 rc=0
+[LAUNCH] GPU 3 -> Qwen2.5-3B-Instruct_formal1000_N50_L6_lam5p0
+[DONE] GPU 2: Qwen2.5-3B-Instruct_formal1000_N10_L6_lamn1p0 rc=0
+[LAUNCH] GPU 2 -> Qwen2.5-3B-Instruct_formal1000_N100_L6_lamn1p5
+[DONE] GPU 0: Qwen2.5-3B-Instruct_formal1000_N1_L6_lamn3p5 rc=0
+[LAUNCH] GPU 0 -> Qwen2.5-3B-Instruct_formal1000_N200_L6_lam3p5
+[DONE] GPU 1: Qwen2.5-3B-Instruct_formal1000_N5_L6_lamn4p5 rc=0
+[DONE] GPU 2: Qwen2.5-3B-Instruct_formal1000_N100_L6_lamn1p5 rc=0
+[DONE] GPU 3: Qwen2.5-3B-Instruct_formal1000_N50_L6_lam5p0 rc=0
+[DONE] GPU 0: Qwen2.5-3B-Instruct_formal1000_N200_L6_lam3p5 rc=0
+
+[ALL DONE] 7 ok, 0 fail, 49.7 min
+Status: /common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/calibration_ablation/Qwen_Qwen2.5-3B-Instruct/GPT_REWRITE/formal_L6_limit1000_status.json

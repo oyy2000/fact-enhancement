@@ -4,9 +4,9 @@
 import os
 import json
 import argparse
+import re
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import scan_and_process
 
 # ============================================================
 # 1. 配置区域 (Configuration)
@@ -26,7 +26,7 @@ elif STATUS == "gpt_rewrite":
     FOLDER_NAME = "gpt_rewrites_unified_new"
     VECTOR_PATH = f"vectors_50_{PROMPT_STYLE}"
 
-DEFAULT_BASE_DIR = f"./{FOLDER_NAME}/{TARGET_MODEL}/{VECTOR_PATH}/{TARGET_MODEL}_applied/"
+DEFAULT_BASE_DIR = f"./exps/{FOLDER_NAME}/{TARGET_MODEL}/{VECTOR_PATH}/{TARGET_MODEL}_applied/"
 DEFAULT_OUT_DIR = os.path.join(DEFAULT_BASE_DIR, TASKS, "aaresults/stats_output")
 
 
@@ -87,6 +87,27 @@ def filter_results_by_layers(results, target_layers):
     return new_results
 
 
+def layer_sort_key(layer):
+    """Sort layers by their numeric id, e.g. L6 < L16 < L35."""
+    match = re.search(r"\d+", str(layer))
+    return int(match.group(0)) if match else 10**9
+
+
+def reorder_for_row_major_legend(handles, labels, ncol):
+    """Matplotlib fills multi-column legends by column; reorder inputs so rows read left-to-right."""
+    if ncol <= 1:
+        return handles, labels
+    n = len(labels)
+    nrow = int(np.ceil(n / ncol))
+    order = []
+    for col in range(ncol):
+        for row in range(nrow):
+            idx = row * ncol + col
+            if idx < n:
+                order.append(idx)
+    return [handles[i] for i in order], [labels[i] for i in order]
+
+
 # ============================================================
 # 3. 新需求：Top10 三个指标竖排 + 共用图例 + 去标题 + 高清 + 大字体
 # ============================================================
@@ -130,7 +151,7 @@ def plot_top10_double_all_vertical(
 
     metric_specs = [
         ("avg_steps", "Average Steps", "steps_count_double"),
-        ("avg_tokens_per_step", "Tokens / Step", "tokens_per_step_avg_double"),
+        ("avg_tokens_per_step", "Density", "tokens_per_step_avg_double"),
         ("avg_total_tokens", "Total Tokens", "total_tokens_double"),
     ]
 
@@ -143,69 +164,83 @@ def plot_top10_double_all_vertical(
         constrained_layout=False,  # 我们后面用 tight_layout + legend 来精调
     )
 
-    colors = plt.cm.tab10.colors
-    color_idx = 0
+    # Keep the Figure 5/6 cool-blue feel, but use hue-separated tones so
+    # the five layers remain distinguishable in print.
+    blue_tone_colors = ["#9DCEF0", "#56b4e9", "#0072b2", "#3f51b5", "#6a1b9a"]
+
+    plot_entries = []
+    for model_key, layers_data in results_top10.items():
+        for layer, lams_data in layers_data.items():
+            plot_entries.append((model_key, layer, lams_data))
+    plot_entries.sort(key=lambda item: (layer_sort_key(item[1]), str(item[0])))
+
+    ordered_layers = []
+    for _, layer, _ in plot_entries:
+        if layer not in ordered_layers:
+            ordered_layers.append(layer)
+    layer_to_color = {
+        layer: blue_tone_colors[i % len(blue_tone_colors)]
+        for i, layer in enumerate(ordered_layers)
+    }
 
     # 为了共用图例：只在第一次出现时收集 handle/label
     legend_handles = []
     legend_labels = []
     seen_labels = set()
 
-    for model_key, layers_data in results_top10.items():
-        for layer, lams_data in layers_data.items():
-            base_label = f"{model_key}-{layer}"
-            current_color = colors[color_idx % len(colors)]
-            color_idx += 1
+    for model_key, layer, lams_data in plot_entries:
+        base_label = f"{model_key}-{layer}"
+        current_color = layer_to_color[layer]
 
-            # 收集三个指标的数据：每个指标一条线（all-samples mean）
-            # {metric_key: (xs, ys)}
-            line_data = {ms[0]: ([], []) for ms in metric_specs}
+        # 收集三个指标的数据：每个指标一条线（all-samples mean）
+        # {metric_key: (xs, ys)}
+        line_data = {ms[0]: ([], []) for ms in metric_specs}
 
-            for lam, stats in lams_data.items():
-                x_val = lam_to_float(lam)
+        for lam, stats in lams_data.items():
+            x_val = lam_to_float(lam)
 
-                Y_arr = np.array(stats.get("Y", []))
-                if Y_arr.size == 0:
+            Y_arr = np.array(stats.get("Y", []))
+            if Y_arr.size == 0:
+                continue
+
+            for metric_key, _, field in metric_specs:
+                vals = np.array(stats.get(field, []))
+                if vals.size == 0:
                     continue
 
-                for metric_key, _, field in metric_specs:
-                    vals = np.array(stats.get(field, []))
-                    if vals.size == 0:
-                        continue
+                # 对齐长度（保险）
+                if vals.size != Y_arr.size:
+                    m = min(vals.size, Y_arr.size)
+                    vals = vals[:m]
 
-                    # 对齐长度（保险）
-                    if vals.size != Y_arr.size:
-                        m = min(vals.size, Y_arr.size)
-                        vals = vals[:m]
+                line_data[metric_key][0].append(x_val)
+                line_data[metric_key][1].append(float(np.mean(vals)))
 
-                    line_data[metric_key][0].append(x_val)
-                    line_data[metric_key][1].append(float(np.mean(vals)))
+        # 画三行
+        for ax, (metric_key, ylabel, _) in zip(axes, metric_specs):
+            xs, ys = line_data[metric_key]
+            if not xs:
+                continue
 
-            # 画三行
-            for ax, (metric_key, ylabel, _) in zip(axes, metric_specs):
-                xs, ys = line_data[metric_key]
-                if not xs:
-                    continue
+            sorted_pairs = sorted(zip(xs, ys), key=lambda t: t[0])
+            sx, sy = zip(*sorted_pairs)
 
-                sorted_pairs = sorted(zip(xs, ys), key=lambda t: t[0])
-                sx, sy = zip(*sorted_pairs)
+            (line_handle,) = ax.plot(
+                sx,
+                sy,
+                marker="o",
+                markersize=marker_size,
+                linestyle="-",
+                linewidth=lw,
+                color=current_color,
+                label=base_label,
+            )
 
-                (line_handle,) = ax.plot(
-                    sx,
-                    sy,
-                    marker="o",
-                    markersize=marker_size,
-                    linestyle="-",
-                    linewidth=lw,
-                    color=current_color,
-                    label=base_label,
-                )
-
-                # legend 收集（只收一次）
-                if base_label not in seen_labels:
-                    legend_handles.append(line_handle)
-                    legend_labels.append(base_label)
-                    seen_labels.add(base_label)
+            # legend 收集（只收一次）
+            if base_label not in seen_labels:
+                legend_handles.append(line_handle)
+                legend_labels.append(base_label)
+                seen_labels.add(base_label)
 
     # 轴样式：无标题，只有 ylabel；x 轴 label 放最下面
     for ax, (_, ylabel, _) in zip(axes, metric_specs):
@@ -221,12 +256,16 @@ def plot_top10_double_all_vertical(
     # 给顶部留空间（legend 在最上面）
     fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.90))
 
+    legend_ncol = min(2, max(1, len(legend_labels)))
+    legend_handles, legend_labels = reorder_for_row_major_legend(
+        legend_handles, legend_labels, legend_ncol
+    )
     fig.legend(
         legend_handles,
         legend_labels,
         loc="upper center",
         bbox_to_anchor=(0.5, 0.98),
-        ncol=2,              # 👈 可以根据 layer 数调，比如 3 / 4 / 5
+        ncol=legend_ncol,
         frameon=False,
     )
 
@@ -262,6 +301,8 @@ if __name__ == "__main__":
             all_results = json.load(f)
     else:
         print("=== Step 1: Searching and Executing Stats Tasks ===")
+        from utils import scan_and_process
+
         all_results = scan_and_process(os.path.join(args.base_dir, TASKS))
 
         if all_results:

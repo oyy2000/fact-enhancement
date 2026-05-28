@@ -107,12 +107,9 @@ MODEL_TO_LAYERS = {
     # "Qwen/Qwen2.5-1.5B-Instruct": [2,3,4] #[i for i in range(29)],
     # "Qwen/Qwen2.5-0.5B-Instruct": [11, 19, 23],
     # "Qwen/Qwen2.5-3B-Instruct":   [18, 10, 9, 6],
-    # "Qwen/Qwen2.5-3B-Instruct":   [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36],
-    # "Qwen/Qwen2.5-3B-Instruct":   [6, 16, 17],
     "meta-llama/Llama-3.2-1B-Instruct": [13,14,8] # [i for i in range(17)], # [4, 8,12,16] 
-    # "meta-llama/Llama-3.2-3B-Instruct": [6, 16, 20, 22, 23, 24, 25], #[i for i in range(28)], #[16,24,32]
-    # "meta-llama/Llama-3.1-8B-Instruct": [8],#[16,24,32]
-    # "meta-llama/Llama-3.2-11B-Vision": [8]
+    # "meta-llama/Llama-3.2-3B-Instruct":  #[16,24,32]
+    # "meta-llama/Llama-3.1-8B-Instruct": #[16,24,32]
 }
 
 # 每个新 job 至少需要的空闲显存（MB）。可以视自己的模型大小调。

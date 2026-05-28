@@ -591,7 +591,7 @@ def plot_avg_score_vs_acc():
     plt.close()
 
 
-def plot_avg_tokens_vs_acc():
+def plot_avg_tokens_vs_acc(correct_only=False):
     plt.figure(figsize=(10,6))
     seen_models = set()
 
@@ -600,10 +600,22 @@ def plot_avg_tokens_vs_acc():
 
         for L in layers:
             for lam, entry in model_data[L].items():
-                avg_tokens = np.mean([
-                    np.mean(steps)
-                    for steps in entry["step_token_len"]
-                ])
+                Y = np.array(entry["Y"])
+                token_rows = entry["step_token_len"]
+                if correct_only:
+                    mask = Y == 1
+                    if not np.any(mask):
+                        continue
+                    avg_tokens = np.mean([
+                        np.mean(token_rows[j])
+                        for j in range(len(token_rows))
+                        if mask[j]
+                    ])
+                else:
+                    avg_tokens = np.mean([
+                        np.mean(steps)
+                        for steps in token_rows
+                    ])
                 acc = np.mean(entry["Y"])
                 label = model_name if model_name not in seen_models else None
                 seen_models.add(model_name)
@@ -620,11 +632,15 @@ def plot_avg_tokens_vs_acc():
 
     plt.xlabel("Avg Tokens per Step")
     plt.ylabel("Accuracy")
-    plt.title("Avg Tokens vs Accuracy")
+    if correct_only:
+        plt.title("Avg Tokens vs Accuracy (x: correct samples only)")
+    else:
+        plt.title("Avg Tokens vs Accuracy")
     plt.grid(alpha=0.3)
     plt.legend(title="Model")
 
-    out_path = f"{SAVE_ROOT}/special/avg_tokens_vs_accuracy.png"
+    suffix = "_correct_only_x" if correct_only else ""
+    out_path = f"{SAVE_ROOT}/special/avg_tokens_vs_accuracy{suffix}.png"
     plt.savefig(out_path, dpi=300)
     plt.close()
     print("Saved:", out_path)
@@ -785,9 +801,10 @@ def plot_avg_total_tokens_vs_acc():
     print("Saved:", out_path)
 
 
-def plot_avg_steps_vs_acc():
+def plot_avg_steps_vs_acc(correct_only=False):
     """
     Plots Average Number of Steps (Depth) vs Accuracy.
+    If correct_only, averages step counts over Y==1 samples only (y-axis still overall accuracy).
     """
     plt.figure(figsize=(10,6))
     seen_models = set()
@@ -799,11 +816,20 @@ def plot_avg_steps_vs_acc():
             lambdas = detect_lambdas(model_data, L)
             for lam in lambdas:
                 entry = model_data[L][lam]
-                
-                # Calculate number of steps per sample
-                num_steps_per_sample = [len(s) for s in entry["step_token_len"]]
-                
-                avg_steps = np.mean(num_steps_per_sample)
+                Y = np.array(entry["Y"])
+                token_rows = entry["step_token_len"]
+                num_steps_per_sample = [len(s) for s in token_rows]
+                if correct_only:
+                    mask = Y == 1
+                    if not np.any(mask):
+                        continue
+                    avg_steps = float(np.mean([
+                        num_steps_per_sample[j]
+                        for j in range(len(num_steps_per_sample))
+                        if mask[j]
+                    ]))
+                else:
+                    avg_steps = np.mean(num_steps_per_sample)
                 acc = np.mean(entry["Y"])
                 
                 label = model_name if model_name not in seen_models else None
@@ -821,11 +847,15 @@ def plot_avg_steps_vs_acc():
 
     plt.xlabel("Avg Number of Steps")
     plt.ylabel("Accuracy")
-    plt.title("Avg Step Count (Depth) vs Accuracy")
+    if correct_only:
+        plt.title("Avg Step Count (Depth) vs Accuracy (x: correct samples only)")
+    else:
+        plt.title("Avg Step Count (Depth) vs Accuracy")
     plt.grid(alpha=0.3)
     plt.legend(title="Model")
 
-    out_path = f"{SAVE_ROOT}/special/avg_num_steps_vs_accuracy.png"
+    suffix = "_correct_only_x" if correct_only else ""
+    out_path = f"{SAVE_ROOT}/special/avg_num_steps_vs_accuracy{suffix}.png"
     plt.savefig(out_path, dpi=300)
     plt.close()
     print("Saved:", out_path)

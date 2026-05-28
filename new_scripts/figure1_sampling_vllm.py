@@ -77,10 +77,17 @@ def count_steps_and_density(text: str, tokenizer):
     return n_steps, total_tokens, avg_tokens_per_step, density
 
 
-def build_chat_prompt(question: str, tokenizer) -> str:
+def get_system_prompt(model_name: str) -> str:
+    model_lower = model_name.lower()
+    if "qwen" in model_lower:
+        return "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
+    return "You are a helpful assistant."
+
+
+def build_chat_prompt(question: str, tokenizer, model_name: str = "") -> str:
     user_msg = PROMPT_TEMPLATE.format(question=question)
     messages = [
-        {"role": "system", "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."},
+        {"role": "system", "content": get_system_prompt(model_name)},
         {"role": "user", "content": user_msg},
     ]
     return tokenizer.apply_chat_template(
@@ -143,7 +150,7 @@ def main():
 
     questions = [ex["question"] for ex in ds]
     gold_answers = [extract_gsm8k_gold(ex["answer"]) for ex in ds]
-    prompts = [build_chat_prompt(q, tokenizer) for q in questions]
+    prompts = [build_chat_prompt(q, tokenizer, args.model) for q in questions]
 
     print(f"Generating {len(prompts)} x {args.num_samples} = {len(prompts) * args.num_samples} responses...")
     t0 = time.time()

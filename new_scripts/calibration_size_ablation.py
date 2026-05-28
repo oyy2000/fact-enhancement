@@ -17,8 +17,6 @@ from utils import qwen_chat_prompt
 
 BASE = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement"
 
-LLAMA_CHAT_TEMPLATE = "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\nSolve the following math problem. Present the final answer in the format: Final Answer: \\boxed{{your_answer}}.\nProlbem: {question}\nAnswer:<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-
 
 def make_prompt(model_name, question):
     if "llama" in model_name.lower():

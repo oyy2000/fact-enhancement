@@ -1,0 +1,112 @@
+method,label,layer,lambda,mean_DAS
+DenseSteer,DenseSteer,16,-6.0,3.0301864671359513
+DenseSteer,DenseSteer,16,-4.0,3.025448112574512
+DenseSteer,DenseSteer,16,-2.0,3.0508218266757208
+DenseSteer,DenseSteer,16,2.0,3.0724211189080437
+DenseSteer,DenseSteer,16,4.0,3.0845831067405536
+DenseSteer,DenseSteer,16,6.0,3.102929820203166
+E0,Random Paraphrase,6,-5.0,3.156351679621072
+E0,Random Paraphrase,6,-4.5,3.137182621490045
+E0,Random Paraphrase,6,-4.0,3.1276153332605543
+E0,Random Paraphrase,6,-3.5,3.1154523697411607
+E0,Random Paraphrase,6,-3.0,3.1174458237872997
+E0,Random Paraphrase,6,-2.5,3.105101360504322
+E0,Random Paraphrase,6,-2.0,3.103134809053585
+E0,Random Paraphrase,6,-1.5,3.0916872787030787
+E0,Random Paraphrase,6,-1.0,3.081406413186159
+E0,Random Paraphrase,6,-0.5,3.071875209700971
+E0,Random Paraphrase,6,0.0,3.0628869949711146
+E0,Random Paraphrase,6,0.5,3.059147072929661
+E0,Random Paraphrase,6,1.0,3.0503126194922
+E0,Random Paraphrase,6,1.5,3.040609031693064
+E0,Random Paraphrase,6,2.0,3.031175584166764
+E0,Random Paraphrase,6,2.5,3.026158093802881
+E0,Random Paraphrase,6,3.0,3.0186229497484063
+E0,Random Paraphrase,6,3.5,3.015187258802911
+E0,Random Paraphrase,6,4.0,3.007688848023553
+E0,Random Paraphrase,6,4.5,3.0029272355839405
+E0,Random Paraphrase,6,5.0,2.9964767685083884
+E1,Random Step Compression,6,-5.0,3.089944372757147
+E1,Random Step Compression,6,-4.5,3.0881667353257893
+E1,Random Step Compression,6,-4.0,3.0811242116412503
+E1,Random Step Compression,6,-3.5,3.0782673274030934
+E1,Random Step Compression,6,-3.0,3.077933315209196
+E1,Random Step Compression,6,-2.5,3.0807824409740685
+E1,Random Step Compression,6,-2.0,3.0783138660208755
+E1,Random Step Compression,6,-1.5,3.0739333418582038
+E1,Random Step Compression,6,-1.0,3.0699268772400794
+E1,Random Step Compression,6,-0.5,3.0702054760101483
+E1,Random Step Compression,6,0.0,3.0628869949711146
+E1,Random Step Compression,6,0.5,3.0661358470895896
+E1,Random Step Compression,6,1.0,3.0589464093109453
+E1,Random Step Compression,6,1.5,3.061090191880812
+E1,Random Step Compression,6,2.0,3.0529750288722988
+E1,Random Step Compression,6,2.5,3.051371259892353
+E1,Random Step Compression,6,3.0,3.0497718416234867
+E1,Random Step Compression,6,3.5,3.0438825210313563
+E1,Random Step Compression,6,4.0,3.039265487658363
+E1,Random Step Compression,6,4.5,3.035711863264106
+E1,Random Step Compression,6,5.0,3.0346316598350125
+E2,Dense-but-Incorrect,6,-5.0,3.065592753934393
+E2,Dense-but-Incorrect,6,-4.5,3.0665371749592687
+E2,Dense-but-Incorrect,6,-4.0,3.070291828610413
+E2,Dense-but-Incorrect,6,-3.5,3.0680348582219503
+E2,Dense-but-Incorrect,6,-3.0,3.0684594459086605
+E2,Dense-but-Incorrect,6,-2.5,3.0701531340924575
+E2,Dense-but-Incorrect,6,-2.0,3.070402895899959
+E2,Dense-but-Incorrect,6,-1.5,3.066352193780652
+E2,Dense-but-Incorrect,6,-1.0,3.0662285113872727
+E2,Dense-but-Incorrect,6,-0.5,3.0645465062841564
+E2,Dense-but-Incorrect,6,0.0,3.0628869949711146
+E2,Dense-but-Incorrect,6,0.5,3.0590008816218024
+E2,Dense-but-Incorrect,6,1.0,3.060744689368622
+E2,Dense-but-Incorrect,6,1.5,3.062802716761709
+E2,Dense-but-Incorrect,6,2.0,3.0605992966149933
+E2,Dense-but-Incorrect,6,2.5,3.0601181767019106
+E2,Dense-but-Incorrect,6,3.0,3.0598390922105607
+E2,Dense-but-Incorrect,6,3.5,3.0541200978367304
+E2,Dense-but-Incorrect,6,4.0,3.0562337327093054
+E2,Dense-but-Incorrect,6,4.5,3.0534894898911196
+E2,Dense-but-Incorrect,6,5.0,3.049340891608364
+E3,Rule-Based Rewriting,6,-5.0,3.087770202233772
+E3,Rule-Based Rewriting,6,-4.5,3.0869739219135024
+E3,Rule-Based Rewriting,6,-4.0,3.0780526278471636
+E3,Rule-Based Rewriting,6,-3.5,3.0794609034262304
+E3,Rule-Based Rewriting,6,-3.0,3.07519780812265
+E3,Rule-Based Rewriting,6,-2.5,3.074948719284659
+E3,Rule-Based Rewriting,6,-2.0,3.07595239971287
+E3,Rule-Based Rewriting,6,-1.5,3.0710559579129377
+E3,Rule-Based Rewriting,6,-1.0,3.065965812074179
+E3,Rule-Based Rewriting,6,-0.5,3.066492852131277
+E3,Rule-Based Rewriting,6,0.0,3.0628869949711146
+E3,Rule-Based Rewriting,6,0.5,3.06162443955334
+E3,Rule-Based Rewriting,6,1.0,3.057755273058088
+E3,Rule-Based Rewriting,6,1.5,3.0573612510074186
+E3,Rule-Based Rewriting,6,2.0,3.063935557520945
+E3,Rule-Based Rewriting,6,2.5,3.0593848884285606
+E3,Rule-Based Rewriting,6,3.0,3.0577424744026382
+E3,Rule-Based Rewriting,6,3.5,3.0573441902309835
+E3,Rule-Based Rewriting,6,4.0,3.0535884489139713
+E3,Rule-Based Rewriting,6,4.5,3.0558659141047517
+E3,Rule-Based Rewriting,6,5.0,3.0477509696773284
+E3.2,GPT-5-mini Rewriting,6,-5.0,3.0416122359462587
+E3.2,GPT-5-mini Rewriting,6,-4.5,3.038273356771142
+E3.2,GPT-5-mini Rewriting,6,-4.0,3.0426760166934543
+E3.2,GPT-5-mini Rewriting,6,-3.5,3.0521679639723645
+E3.2,GPT-5-mini Rewriting,6,-3.0,3.0638589361942095
+E3.2,GPT-5-mini Rewriting,6,-2.5,3.070513191704189
+E3.2,GPT-5-mini Rewriting,6,-2.0,3.077909688493325
+E3.2,GPT-5-mini Rewriting,6,-1.5,3.0840665743170406
+E3.2,GPT-5-mini Rewriting,6,-1.0,3.0807692281332097
+E3.2,GPT-5-mini Rewriting,6,-0.5,3.0776748623950025
+E3.2,GPT-5-mini Rewriting,6,0.0,3.0628869949711146
+E3.2,GPT-5-mini Rewriting,6,0.5,3.0514400476001993
+E3.2,GPT-5-mini Rewriting,6,1.0,3.024358616732234
+E3.2,GPT-5-mini Rewriting,6,1.5,2.997089152676913
+E3.2,GPT-5-mini Rewriting,6,2.0,2.9676746429205005
+E3.2,GPT-5-mini Rewriting,6,2.5,2.9459056717025813
+E3.2,GPT-5-mini Rewriting,6,3.0,2.908522156833256
+E3.2,GPT-5-mini Rewriting,6,3.5,2.8681771080754204
+E3.2,GPT-5-mini Rewriting,6,4.0,2.841126583034985
+E3.2,GPT-5-mini Rewriting,6,4.5,2.816536587172372
+E3.2,GPT-5-mini Rewriting,6,5.0,2.805707766563452

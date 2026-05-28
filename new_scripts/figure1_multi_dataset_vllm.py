@@ -287,10 +287,17 @@ def load_dataset_items(dataset_name):
 
 # ── Prompt building ──────────────────────────────────────────────────────────
 
-def build_chat_prompt(question: str, tokenizer) -> str:
+def get_system_prompt(model_name: str) -> str:
+    model_lower = model_name.lower()
+    if "qwen" in model_lower:
+        return "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
+    return "You are a helpful assistant."
+
+
+def build_chat_prompt(question: str, tokenizer, model_name: str = "") -> str:
     user_msg = PROMPT_TEMPLATE.format(question=question)
     messages = [
-        {"role": "system", "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."},
+        {"role": "system", "content": get_system_prompt(model_name)},
         {"role": "user", "content": user_msg},
     ]
     return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
@@ -310,6 +317,9 @@ def main():
     parser.add_argument("--tensor_parallel_size", type=int, default=1)
     parser.add_argument("--max_model_len", type=int, default=4096)
     parser.add_argument("--gpu_memory_utilization", type=float, default=0.90)
+    parser.add_argument("--swap_space", type=int, default=4,
+                        help="CPU swap space per GPU in GB (default: 4)")
+    parser.add_argument("--enforce_eager", action="store_true")
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
 
@@ -333,14 +343,18 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
 
     print("Loading vLLM engine...")
-    llm = LLM(
+    llm_kwargs = dict(
         model=args.model,
         tensor_parallel_size=args.tensor_parallel_size,
         dtype="float16",
         trust_remote_code=True,
         max_model_len=args.max_model_len,
         gpu_memory_utilization=args.gpu_memory_utilization,
+        swap_space=args.swap_space,
     )
+    if args.enforce_eager:
+        llm_kwargs["enforce_eager"] = True
+    llm = LLM(**llm_kwargs)
 
     sampling_params = SamplingParams(
         n=args.num_samples,
@@ -350,7 +364,7 @@ def main():
         stop=["<|im_end|>", "<|eot_id|>", "Problem:"],
     )
 
-    prompts = [build_chat_prompt(q, tokenizer) for q in questions]
+    prompts = [build_chat_prompt(q, tokenizer, args.model) for q in questions]
 
     print(f"Generating {len(prompts)} x {args.num_samples} = {len(prompts) * args.num_samples} responses...")
     t0 = time.time()

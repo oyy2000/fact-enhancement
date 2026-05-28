@@ -1,22 +1,24 @@
 # prm_utils.py
 import re
 
+
+
 def qwen_chat_prompt(
     question: str,
     system: str = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant.",
 ) -> str:
     """
     Canonical Qwen chat template (string form).
-    No dependency on lm-eval arg_0.
+    Must match tokenizer.apply_chat_template output for consistency with lm_eval.
     """
     return (
         "<|im_start|>system\n"
-        f"{system}\n"
+        f"{system}"
         "<|im_end|>\n"
         "<|im_start|>user\n"
         "Solve the following math problem. Present the final answer in the format: Final Answer: \\boxed{your_answer}.\n"
         f"Prolbem: {question}\n"
-        "Answer:\n"
+        "Answer:"
         "<|im_end|>\n"
         "<|im_start|>assistant\n"
     )

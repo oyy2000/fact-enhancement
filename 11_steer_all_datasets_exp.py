@@ -3,6 +3,7 @@
 
 import os
 import re
+import sys
 import json
 import time
 import threading
@@ -15,25 +16,99 @@ from pathlib import Path
 from typing import Optional, Tuple, List, Dict, Any
 
 # ================= Steering Config =================
+_BASE = "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/exps"
+
 STEERING_CONFIG = {
+    "Qwen/Qwen2.5-3B-Instruct": {
+        "GPT_REWRITE": {
+            "layers": [6],
+            
+            "lambdas": [4.0],
+            "steer_vec_path": (
+                f"{_BASE}/gpt_rewrites_unified_new/"
+                "Qwen_Qwen2.5-3B-Instruct/vectors_50_old/"
+                "Qwen_Qwen2.5-3B-Instruct_applied/steering_vector.pt"
+            ),
+        },
+        "LARGE_MODEL": {
+            "layers": [6],
+            "lambdas": [0.45],
+            "steer_vec_path": (
+                f"{_BASE}/large_model_rewrites_unified_new/"
+                "Qwen_Qwen2.5-3B-Instruct/"
+                "vectors_50_paired_Qwen_Qwen2.5-7B-Instruct/"
+                "Qwen_Qwen2.5-3B-Instruct_applied/steering_vector.pt"
+            ),
+        },
+    },
+    "Qwen/Qwen2.5-1.5B-Instruct": {
+        "GPT_REWRITE": {
+            "layers": [27],
+            "lambdas": [2.5],
+            "steer_vec_path": (
+                f"{_BASE}/gpt_rewrites_unified_new/"
+                "Qwen_Qwen2.5-1.5B-Instruct/vectors_50_old/"
+                "Qwen_Qwen2.5-1.5B-Instruct_applied/steering_vector.pt"
+            ),
+        },
+        "LARGE_MODEL": {
+            "layers": [2],
+            "lambdas": [-0.5],
+            "steer_vec_path": (
+                f"{_BASE}/large_model_rewrites_unified_new/"
+                "Qwen_Qwen2.5-1.5B-Instruct/"
+                "vectors_50_paired_Qwen_Qwen2.5-7B-Instruct/"
+                "Qwen_Qwen2.5-1.5B-Instruct_applied/steering_vector.pt"
+            ),
+        },
+    },
+    "meta-llama/Llama-3.2-1B-Instruct": {
+        "GPT_REWRITE": {
+            "layers": [8],
+            "lambdas": [-2.0],
+            "steer_vec_path": (
+                f"{_BASE}/gpt_rewrites_unified_new/"
+                "meta-llama_Llama-3.2-1B-Instruct/vectors_50_old/"
+                "meta-llama_Llama-3.2-1B-Instruct_applied/steering_vector.pt"
+            ),
+        },
+        "LARGE_MODEL": {
+            "layers": [14],
+            "lambdas": [-1.0],
+            "steer_vec_path": (
+                f"{_BASE}/large_model_rewrites_unified_new/"
+                "meta-llama_Llama-3.2-1B-Instruct/"
+                "vectors_50_paired_meta-llama_Llama-3.1-8B-Instruct/"
+                "meta-llama_Llama-3.2-1B-Instruct_applied/steering_vector.pt"
+            ),
+        },
+    },
     "meta-llama/Llama-3.2-3B-Instruct": {
+        "GPT_REWRITE": {
+            "layers": [24],
+            "lambdas": [-2.0],
+            "steer_vec_path": (
+                f"{_BASE}/gpt_rewrites_unified_new/"
+                "meta-llama_Llama-3.2-3B-Instruct/vectors_50_old/"
+                "meta-llama_Llama-3.2-3B-Instruct_applied/steering_vector.pt"
+            ),
+        },
         "LARGE_MODEL": {
             "layers": [22],
             "lambdas": [-0.5],
             "steer_vec_path": (
-                "/common/users/sl2148/Public/yang_ouyang/projects/fact-enhancement/"
-                "large_model_rewrites_unified_new/"
+                f"{_BASE}/large_model_rewrites_unified_new/"
                 "meta-llama_Llama-3.2-3B-Instruct/"
                 "vectors_50_paired_meta-llama_Llama-3.1-8B-Instruct/"
-                "meta-llama_Llama-3.2-3B-Instruct_applied/"
-                "steering_vector.pt"
+                "meta-llama_Llama-3.2-3B-Instruct_applied/steering_vector.pt"
             ),
         },
     },
 }
 
 DEFAULT_TASKS = [
-    "Olympiad",
+    "mmlu",
+    "gpqa_main_zeroshot",
 ]
 
 DEFAULT_GPUS = [1]
@@ -126,8 +201,10 @@ class TaskStateManager:
         self.data: Dict[str, Dict[str, Any]] = {}
         self.load_or_initialize(jobs)
 
-    def _key(self, model: str, task: str, layer: int, lam: float) -> str:
+    def _key(self, model: str, task: str, layer: int, lam: float, experiment_mode: str = "") -> str:
         lam_s = f"{lam:.6f}".rstrip("0").rstrip(".")
+        if experiment_mode:
+            return f"{experiment_mode}|{model}|{task}|L{layer}|lam{lam_s}"
         return f"{model}|{task}|L{layer}|lam{lam_s}"
 
     def load_or_initialize(self, jobs: List[dict]):
@@ -145,15 +222,15 @@ class TaskStateManager:
 
             updates = False
 
-            # 补充新任务
             for j in jobs:
-                k = self._key(j["model"], j["task"], j["layer"], j["lam"])
+                k = self._key(j["model"], j["task"], j["layer"], j["lam"], j.get("experiment_mode", ""))
                 if k in self.data and "steer_vec_path" not in self.data[k]:
                     self.data[k]["steer_vec_path"] = j["steer_vec_path"]
                     updates = True
 
                 if k not in self.data:
                     self.data[k] = {
+                        "experiment_mode": j.get("experiment_mode", ""),
                         "model": j["model"],
                         "task": j["task"],
                         "layer": j["layer"],
@@ -195,6 +272,7 @@ class TaskStateManager:
                     info["last_update"] = str(datetime.now())
                     self._save_locked()
                     return {
+                        "experiment_mode": info.get("experiment_mode", ""),
                         "model": info["model"],
                         "task": info["task"],
                         "layer": int(info["layer"]),
@@ -203,8 +281,8 @@ class TaskStateManager:
                     }
         return None
 
-    def update(self, model: str, task: str, layer: int, lam: float, status: str, error_msg: str = ""):
-        k = self._key(model, task, layer, lam)
+    def update(self, model: str, task: str, layer: int, lam: float, status: str, error_msg: str = "", experiment_mode: str = ""):
+        k = self._key(model, task, layer, lam, experiment_mode)
         with json_lock:
             if k in self.data:
                 self.data[k]["status"] = status
@@ -217,7 +295,6 @@ class TaskStateManager:
 def run_one(
     gpu_id: int,
     job: dict,
-    experiment_mode: str,
     output_root: Path,
     backend_model_name: str,
     batch_size: int,
@@ -230,6 +307,7 @@ def run_one(
     layer = int(job["layer"])
     lam = float(job["lam"])
     steer_vec_path = job["steer_vec_path"]
+    exp_mode = job.get("experiment_mode", "UNKNOWN")
 
     base_s = sanitize_model_name(base_model)
 
@@ -240,13 +318,14 @@ def run_one(
         "AIME": 2048,
         "hendrycks_math_500": 2048,
         "Olympiad": 2048,
-        # 你也可以加 dense 的 key；不加就走 default
         "hendrycks_math_500_dense": 2048,
         "Olympiad_dense": 2048,
+        "mmlu": 256,
+        "gpqa_main_zeroshot": 256,
     }.get(task, max_gen_default)
 
     lam_tag = f"{lam:.6f}".rstrip("0").rstrip(".")
-    outdir = output_root / experiment_mode / base_s / task / f"L{layer}" / f"lam_{lam_tag}"
+    outdir = output_root / exp_mode / base_s / task / f"L{layer}" / f"lam_{lam_tag}"
     outdir.mkdir(parents=True, exist_ok=True)
 
     env = os.environ.copy()
@@ -266,7 +345,7 @@ def run_one(
     )
 
     cmd = [
-        "lm_eval",
+        sys.executable, "-m", "lm_eval",
         "--model", backend_model_name,
         "--model_args", model_args,
         "--tasks", task,
@@ -308,20 +387,20 @@ def run_one(
             lf.flush()
 
         if ret == 0:
-            state.update(base_model, task, layer, lam, "completed")
+            state.update(base_model, task, layer, lam, "completed", experiment_mode=exp_mode)
             with log_lock:
-                print(f"[v] [GPU {gpu_id}] DONE: {base_model} | {task} | L{layer} lam={lam} (batch={batch_size}, gen={task_max_gen})")
+                print(f"[v] [GPU {gpu_id}] DONE: {exp_mode} | {base_model} | {task} | L{layer} lam={lam} (batch={batch_size}, gen={task_max_gen})")
         else:
             msg = f"returncode={ret}, see log: {log_file}\n--- tail ---\n{tail}"
-            state.update(base_model, task, layer, lam, "failed", msg)
+            state.update(base_model, task, layer, lam, "failed", msg, experiment_mode=exp_mode)
             with log_lock:
-                print(f"[!] [GPU {gpu_id}] FAILED: {base_model} | {task} | L{layer} lam={lam}\n{msg}")
+                print(f"[!] [GPU {gpu_id}] FAILED: {exp_mode} | {base_model} | {task} | L{layer} lam={lam}\n{msg}")
 
     except Exception:
         msg = traceback.format_exc()
-        state.update(base_model, task, layer, lam, "failed", msg)
+        state.update(base_model, task, layer, lam, "failed", msg, experiment_mode=exp_mode)
         with log_lock:
-            print(f"[!] [GPU {gpu_id}] CRASHED: {base_model} | {task} | L{layer} lam={lam}\n{msg}")
+            print(f"[!] [GPU {gpu_id}] CRASHED: {exp_mode} | {base_model} | {task} | L{layer} lam={lam}\n{msg}")
 
 
 def worker(gpu_queue: Queue, state: TaskStateManager, args):
@@ -336,7 +415,6 @@ def worker(gpu_queue: Queue, state: TaskStateManager, args):
             run_one(
                 gpu_id=gpu_id,
                 job=job,
-                experiment_mode=args.experiment_mode,
                 output_root=Path(args.output_root),
                 backend_model_name=args.lm_eval_model,
                 batch_size=args.batch_size,
@@ -357,7 +435,7 @@ def main():
     parser.add_argument(
         "--experiment_mode",
         type=str,
-        choices=["GPT_REWRITE", "LARGE_MODEL"],
+        choices=["GPT_REWRITE", "LARGE_MODEL", "ALL"],
         required=True,
     )
     parser.add_argument("--prompt_style", type=str, default="old",
@@ -375,40 +453,47 @@ def main():
     parser.add_argument("--mem_check_interval", type=int, default=15,
                         help="Seconds between GPU memory checks when waiting")
 
-    parser.add_argument("--output_root", type=str, default="steer_runs_6")
-    parser.add_argument("--status_file", type=str, default="steer_runs_6/experiment_status.json")
+    parser.add_argument("--output_root", type=str, default="exps/steer_runs_mmlu_gpqa")
+    parser.add_argument("--status_file", type=str, default="exps/steer_runs_mmlu_gpqa/experiment_status.json")
 
     parser.add_argument("--lm_eval_model", type=str, default="steer_hf",
                         help="lm_eval --model value, e.g. steer_hf")
 
     args = parser.parse_args()
 
+    if args.experiment_mode == "ALL":
+        modes_to_run = ["GPT_REWRITE", "LARGE_MODEL"]
+    else:
+        modes_to_run = [args.experiment_mode]
+
     print("[*] Using steering config for models:")
     for m in STEERING_CONFIG:
         print("   -", m)
+    print(f"[*] Experiment modes: {modes_to_run}")
 
-    # 构建 jobs
     jobs: List[dict] = []
 
-    for model, model_cfg in STEERING_CONFIG.items():
-        if args.experiment_mode not in model_cfg:
-            continue
+    for mode in modes_to_run:
+        for model, model_cfg in STEERING_CONFIG.items():
+            if mode not in model_cfg:
+                continue
 
-        cfg = model_cfg[args.experiment_mode]
-        vec_path = Path(cfg["steer_vec_path"])
-        if not vec_path.exists():
-            raise FileNotFoundError(f"Steering vector not found: {vec_path}")
+            cfg = model_cfg[mode]
+            vec_path = Path(cfg["steer_vec_path"])
+            if not vec_path.exists():
+                raise FileNotFoundError(f"Steering vector not found: {vec_path}")
 
-        for task in args.tasks:
-            for layer in cfg["layers"]:
-                for lam in cfg["lambdas"]:
-                    jobs.append({
-                        "model": model,
-                        "task": task,
-                        "layer": int(layer),
-                        "lam": float(lam),
-                        "steer_vec_path": str(vec_path),
-                    })
+            for task in args.tasks:
+                for layer in cfg["layers"]:
+                    for lam in cfg["lambdas"]:
+                        jobs.append({
+                            "model": model,
+                            "task": task,
+                            "layer": int(layer),
+                            "lam": float(lam),
+                            "steer_vec_path": str(vec_path),
+                            "experiment_mode": mode,
+                        })
 
     status_path = Path(args.status_file)
     state = TaskStateManager(status_path, jobs)

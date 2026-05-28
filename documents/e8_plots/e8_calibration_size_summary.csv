@@ -1,0 +1,15 @@
+method,N,layer,lambda,accuracy
+DenseSteer,1,6,-3.5,0.84
+DenseSteer,5,6,-4.5,0.841
+DenseSteer,10,6,-1.0,0.836
+DenseSteer,25,6,5.0,0.842
+DenseSteer,50,6,5.0,0.845
+DenseSteer,100,6,-1.5,0.836
+DenseSteer,200,6,3.5,0.839
+InFamilySteer,1,6,0.4,0.842
+InFamilySteer,5,6,0.6,0.852
+InFamilySteer,10,6,0.5,0.843
+InFamilySteer,25,6,0.4,0.858
+InFamilySteer,50,6,0.4,0.852
+InFamilySteer,100,6,0.4,0.851
+InFamilySteer,200,6,0.6,0.825
